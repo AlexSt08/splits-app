@@ -1,0 +1,15 @@
+{
+  "name": "Splits — Suivi de course",
+  "short_name": "Splits",
+  "description": "Suivi de course personnel : distance, allure, temps et historique",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#171B1F",
+  "theme_color": "#171B1F",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

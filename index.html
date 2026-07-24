@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Splits — Suivi de course</title>
+<meta name="theme-color" content="#171b1f" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Splits" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ HOME ============ -->
+  <section id="screen-home" class="screen active">
+    <div class="topbar">
+      <div class="wordmark"><b>Splits</b> · suivi perso</div>
+    </div>
+
+    <div class="hero-stat">
+      <div class="eyebrow">Total cumulé</div>
+      <div class="big" id="home-total-dist">0,0<span>km</span></div>
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-cell">
+        <div class="label">Sorties</div>
+        <div class="value" id="home-count">0</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">Temps total</div>
+        <div class="value" id="home-total-time">0h00</div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">Allure moy.</div>
+        <div class="value" id="home-avg-pace">—</div>
+      </div>
+    </div>
+
+    <div>
+      <button class="start-btn" id="btn-start-run">
+        <span class="dot"></span> Démarrer une course
+      </button>
+      <div class="gps-status" id="gps-status" style="margin-top:10px;">
+        <span class="led"></span><span id="gps-status-text">GPS non vérifié</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-head">
+        <h2>Dernières courses</h2>
+        <button class="see-all" id="btn-see-all">Tout voir</button>
+      </div>
+      <div class="run-list" id="home-run-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ TRACKING ============ -->
+  <section id="screen-track" class="screen">
+    <div class="topbar">
+      <div class="wordmark" id="track-status">EN COURSE</div>
+      <div class="wordmark" id="track-gps-mini">GPS —</div>
+    </div>
+
+    <div class="track-timer">
+      <div class="clock" id="track-clock">00:00<span class="blink">:</span>00</div>
+    </div>
+
+    <div class="lap-ring-wrap">
+      <svg viewBox="0 0 120 120">
+        <circle class="lap-ring-bg" cx="60" cy="60" r="52"></circle>
+        <circle class="lap-ring-fg" id="lap-ring-fg" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"></circle>
+      </svg>
+      <div class="lap-ring-center">
+        <div class="val" id="track-dist">0,00</div>
+        <div class="unit">km — km en cours</div>
+      </div>
+    </div>
+
+    <div class="track-stats">
+      <div class="cell">
+        <div class="label">Allure actuelle</div>
+        <div class="value" id="track-pace-now">—'—"</div>
+      </div>
+      <div class="cell">
+        <div class="label">Allure moyenne</div>
+        <div class="value" id="track-pace-avg">—'—"</div>
+      </div>
+    </div>
+
+    <div id="track-map"></div>
+
+    <div class="track-controls">
+      <button class="ctrl-btn pause" id="btn-pause">Pause</button>
+      <button class="ctrl-btn stop" id="btn-stop">Terminer</button>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section id="screen-history" class="screen">
+    <div class="back-row">
+      <button id="btn-back-from-history">← Accueil</button>
+    </div>
+    <div class="topbar" style="padding-top:0;">
+      <div class="wordmark"><b>Historique</b></div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="cell">
+        <div class="label">Record 1 km</div>
+        <div class="value" id="stat-best-km">—</div>
+      </div>
+      <div class="cell">
+        <div class="label">Plus longue sortie</div>
+        <div class="value" id="stat-longest">—</div>
+      </div>
+      <div class="cell gold">
+        <div class="label">Objectif hebdo</div>
+        <div class="value" id="stat-week-goal">0,0 / <span id="goal-target">20</span> km</div>
+      </div>
+      <div class="cell">
+        <div class="label">Cette semaine</div>
+        <div class="value" id="stat-week-runs">0 sortie</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-head"><h2>Toutes les courses</h2></div>
+      <div class="run-list" id="history-run-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ RUN DETAIL ============ -->
+  <section id="screen-detail" class="screen">
+    <div class="back-row">
+      <button id="btn-back-from-detail">← Retour</button>
+    </div>
+    <div style="padding: 0 2px;">
+      <div class="detail-title" id="detail-date">—</div>
+      <div class="detail-hero" id="detail-dist">0,00 km</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="cell">
+        <div class="label">Durée</div>
+        <div class="value" id="detail-duration">—</div>
+      </div>
+      <div class="cell">
+        <div class="label">Allure moy.</div>
+        <div class="value" id="detail-pace">—</div>
+      </div>
+    </div>
+
+    <div id="detail-map"></div>
+
+    <div>
+      <div class="section-head"><h2>Splits par km</h2></div>
+      <div class="splits-table" id="detail-splits"></div>
+    </div>
+
+    <button class="delete-run" id="btn-delete-run">Supprimer cette course</button>
+  </section>
+
+  <div class="tabbar">
+    <button class="tab-home active" data-tab="home">Accueil</button>
+    <button class="tab-history" data-tab="history">Historique</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
