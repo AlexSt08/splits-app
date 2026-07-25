@@ -272,6 +272,50 @@ button:focus-visible, a:focus-visible {
   border-radius: var(--radius-sm);
 }
 
+/* ---------- HYROX objectif ---------- */
+.hyrox-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hyrox-card-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.hyrox-card-row {
+  display: flex;
+  gap: 20px;
+}
+.hyrox-card-cell { flex: 1; }
+.hyrox-sub {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.hyrox-val {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  margin-top: 3px;
+  color: var(--ink);
+}
+.hyrox-status {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  line-height: 1.4;
+}
+.hyrox-status.ok { color: var(--good); }
+.hyrox-status.warn { color: var(--accent); }
+
 /* ---------- TRACKING ---------- */
 #screen-track {
   background: var(--bg);
