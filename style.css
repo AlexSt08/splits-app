@@ -72,7 +72,7 @@ button:focus-visible, a:focus-visible {
 /* ---------- top bar ---------- */
 .topbar {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 22px 20px 10px;
 }
@@ -94,6 +94,23 @@ button:focus-visible, a:focus-visible {
   color: var(--ink-dim);
   flex-shrink: 0;
 }
+
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 5px;
+}
+.sync-status .led {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ink-faint);
+  flex-shrink: 0;
+}
+.sync-status.ok .led { background: var(--good); }
+.sync-status.ok #sync-status-text { color: var(--ink-dim); }
 
 /* ---------- HOME ---------- */
 #screen-home { padding: 0 20px 28px; gap: 26px; }
