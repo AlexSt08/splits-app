@@ -22,7 +22,10 @@
   <!-- ============ HOME ============ -->
   <section id="screen-home" class="screen active">
     <div class="topbar">
-      <div class="wordmark"><b>Splits</b> · suivi perso</div>
+      <div>
+        <div class="wordmark"><b>Splits</b> · suivi perso</div>
+        <div class="sync-status" id="sync-status"><span class="led"></span><span id="sync-status-text">Non connecté</span></div>
+      </div>
       <button id="btn-account" class="account-icon" title="Compte">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
       </button>
@@ -213,6 +216,7 @@
 
     <div id="account-logged-out">
       <p class="account-hint">Connecte-toi pour synchroniser tes courses entre appareils. Sans connexion, l'app reste utilisable normalement en local.</p>
+      <input type="text" id="account-name" class="account-input" placeholder="Ton prénom" autocomplete="given-name" style="margin-bottom:10px;" />
       <input type="email" id="account-email" class="account-input" placeholder="ton@email.com" autocomplete="email" inputmode="email" />
       <button id="btn-send-magic-link" class="start-btn" style="margin-top:12px;">Envoyer le lien magique</button>
       <div class="account-status" id="account-status"></div>
@@ -227,6 +231,8 @@
         <div class="label">Dernière synchro</div>
         <div class="value" id="account-last-sync">—</div>
       </div>
+      <input type="text" id="account-name-input" class="account-input" placeholder="Ton prénom" autocomplete="given-name" style="margin-top:16px;" />
+      <button id="btn-save-name" class="ctrl-btn pause" style="width:100%;margin-top:10px;">Enregistrer le prénom</button>
       <button id="btn-sync-now" class="ctrl-btn pause" style="width:100%;margin-top:16px;">Synchroniser maintenant</button>
       <button id="btn-sign-out" class="delete-run" style="width:100%;margin-top:22px;">Se déconnecter</button>
     </div>
