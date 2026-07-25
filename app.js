@@ -620,6 +620,11 @@ setInterval(() => { if (tracking.active && tracking.screenLocked) updateLockRead
 // ============================================================
 // SUPABASE — auth (magic link) & synchronisation
 // ============================================================
+function displayNameFor(user) {
+  if (!user) return "";
+  return (user.user_metadata && user.user_metadata.display_name) || user.email;
+}
+
 function runToRemote(r) {
   return {
     id: r.id,
@@ -708,6 +713,18 @@ async function syncNow(opts) {
   }
 }
 
+function updateSyncStatus() {
+  const el = document.getElementById("sync-status");
+  const textEl = document.getElementById("sync-status-text");
+  if (currentUser) {
+    el.className = "sync-status ok";
+    textEl.textContent = `Synchronisé — ${displayNameFor(currentUser)}`;
+  } else {
+    el.className = "sync-status";
+    textEl.textContent = "Non connecté";
+  }
+}
+
 function updateAccountUI() {
   const loggedOut = document.getElementById("account-logged-out");
   const loggedIn = document.getElementById("account-logged-in");
@@ -715,12 +732,14 @@ function updateAccountUI() {
     loggedOut.style.display = "none";
     loggedIn.style.display = "block";
     document.getElementById("account-email-display").textContent = currentUser.email;
+    document.getElementById("account-name-input").value = (currentUser.user_metadata && currentUser.user_metadata.display_name) || "";
     const last = localStorage.getItem(LAST_SYNC_KEY);
     document.getElementById("account-last-sync").textContent = last ? new Date(last).toLocaleString("fr-FR") : "Jamais";
   } else {
     loggedOut.style.display = "block";
     loggedIn.style.display = "none";
   }
+  updateSyncStatus();
 }
 
 sb.auth.onAuthStateChange((event, session) => {
@@ -730,6 +749,7 @@ sb.auth.onAuthStateChange((event, session) => {
 });
 
 document.getElementById("btn-send-magic-link").addEventListener("click", async () => {
+  const name = document.getElementById("account-name").value.trim();
   const email = document.getElementById("account-email").value.trim();
   const statusEl = document.getElementById("account-status");
   if (!email) { statusEl.textContent = "Entre une adresse email."; return; }
@@ -737,12 +757,28 @@ document.getElementById("btn-send-magic-link").addEventListener("click", async (
   try {
     const { error } = await sb.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin + window.location.pathname },
+      options: {
+        emailRedirectTo: window.location.origin + window.location.pathname,
+        data: name ? { display_name: name } : undefined,
+      },
     });
     if (error) throw error;
     statusEl.textContent = "Lien envoyé — vérifie ta boîte mail.";
   } catch (e) {
     statusEl.textContent = "Erreur d'envoi. Réessaie.";
+  }
+});
+document.getElementById("btn-save-name").addEventListener("click", async () => {
+  const name = document.getElementById("account-name-input").value.trim();
+  if (!name) { toast("Entre un prénom."); return; }
+  try {
+    const { data, error } = await sb.auth.updateUser({ data: { display_name: name } });
+    if (error) throw error;
+    currentUser = data.user;
+    updateAccountUI();
+    toast("Prénom enregistré");
+  } catch (e) {
+    toast("Erreur lors de l'enregistrement");
   }
 });
 document.getElementById("btn-sign-out").addEventListener("click", async () => {
