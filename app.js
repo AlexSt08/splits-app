@@ -31,6 +31,8 @@ let tracking = {
   map: null,
   polyline: null,
   marker: null,
+  wakeLock: null,
+  screenLocked: false,
 };
 
 // ---------- persistence ----------
@@ -303,8 +305,12 @@ function startRun() {
     map: null,
     polyline: null,
     marker: null,
+    wakeLock: null,
+    screenLocked: false,
   };
   showScreen("screen-track");
+  document.getElementById("lock-overlay").classList.remove("show");
+  document.getElementById("btn-lock-fab").style.display = "flex";
   document.getElementById("btn-pause").textContent = "Pause";
   document.getElementById("btn-pause").className = "ctrl-btn pause";
   updateTrackUI();
@@ -317,6 +323,7 @@ function startRun() {
   });
 
   tracking.clockInterval = setInterval(updateTrackUI, 1000);
+  requestWakeLock();
 
   setTimeout(() => {
     const mapEl = document.getElementById("track-map");
@@ -425,6 +432,9 @@ function stopRun() {
   }
   clearInterval(tracking.clockInterval);
   if (tracking.watchId != null) navigator.geolocation.clearWatch(tracking.watchId);
+  releaseWakeLock();
+  setScreenLock(false);
+  document.getElementById("btn-lock-fab").style.display = "none";
 
   const durationSec = Math.round(currentElapsedSec());
   const distanceM = tracking.distanceM;
@@ -451,6 +461,88 @@ function stopRun() {
   renderHome();
   toast(`Course enregistrée — ${fmtKm(distanceM)} km`);
 }
+
+// ============================================================
+// WAKE LOCK — garde l'écran allumé pendant une course
+// ============================================================
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    tracking.wakeLock = await navigator.wakeLock.request("screen");
+  } catch (e) {
+    // refusé (batterie faible, onglet en arrière-plan, etc.) — silencieux
+  }
+}
+function releaseWakeLock() {
+  if (tracking.wakeLock) {
+    tracking.wakeLock.release().catch(() => {});
+    tracking.wakeLock = null;
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (tracking.active && document.visibilityState === "visible" && !tracking.wakeLock) {
+    requestWakeLock();
+  }
+});
+
+// ============================================================
+// VERROUILLAGE TACTILE — bloque les appuis accidentels (poche, brassard)
+// N'empêche PAS l'écran de s'éteindre à lui seul : combiné au Wake Lock ci-dessus.
+// ============================================================
+const lockOverlay = document.getElementById("lock-overlay");
+const lockFab = document.getElementById("btn-lock-fab");
+const unlockBtn = document.getElementById("btn-unlock-hold");
+const unlockFill = document.getElementById("unlock-fill");
+const HOLD_MS = 1400;
+let holdTimer = null;
+let holdStart = null;
+let holdRAF = null;
+
+function setScreenLock(locked) {
+  tracking.screenLocked = locked;
+  lockOverlay.classList.toggle("show", locked);
+  if (locked) updateLockReadout();
+}
+
+lockFab.addEventListener("click", () => setScreenLock(true));
+
+function updateLockReadout() {
+  if (!tracking.active) return;
+  document.getElementById("lock-dist").innerHTML = `${fmtKm(tracking.distanceM)} <span>km</span>`;
+  document.getElementById("lock-clock").textContent = fmtClock(Math.floor(currentElapsedSec()));
+  const elapsed = currentElapsedSec();
+  const avgPace = tracking.distanceM > 0 ? elapsed / (tracking.distanceM / 1000) : 0;
+  document.getElementById("lock-pace").textContent = `${fmtPace(avgPace)} /km`;
+}
+
+function startHold(e) {
+  e.preventDefault();
+  holdStart = performance.now();
+  const step = () => {
+    const pct = Math.min(100, ((performance.now() - holdStart) / HOLD_MS) * 100);
+    unlockFill.style.height = pct + "%";
+    if (pct >= 100) {
+      setScreenLock(false);
+      resetHold();
+      return;
+    }
+    holdRAF = requestAnimationFrame(step);
+  };
+  holdRAF = requestAnimationFrame(step);
+}
+function resetHold() {
+  cancelAnimationFrame(holdRAF);
+  holdRAF = null;
+  holdStart = null;
+  unlockFill.style.height = "0%";
+}
+unlockBtn.addEventListener("pointerdown", startHold);
+unlockBtn.addEventListener("pointerup", resetHold);
+unlockBtn.addEventListener("pointerleave", resetHold);
+unlockBtn.addEventListener("pointercancel", resetHold);
+
+// rafraîchit l'affichage de l'écran verrouillé en même temps que le reste
+setInterval(() => { if (tracking.active && tracking.screenLocked) updateLockReadout(); }, 1000);
 
 // ============================================================
 // init
