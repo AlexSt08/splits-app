@@ -23,6 +23,9 @@
   <section id="screen-home" class="screen active">
     <div class="topbar">
       <div class="wordmark"><b>Splits</b> · suivi perso</div>
+      <button id="btn-account" class="account-icon" title="Compte">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"></path></svg>
+      </button>
     </div>
 
     <div class="hero-stat">
@@ -187,7 +190,46 @@
       <div class="splits-table" id="detail-splits"></div>
     </div>
 
+    <button class="share-run" id="btn-share-run">Partager cette course</button>
+    <div class="share-panel" id="share-panel" style="display:none;">
+      <div class="share-link" id="share-link-text"></div>
+      <div class="share-actions">
+        <button id="btn-copy-share">Copier le lien</button>
+        <button id="btn-revoke-share">Arrêter le partage</button>
+      </div>
+    </div>
+
     <button class="delete-run" id="btn-delete-run">Supprimer cette course</button>
+  </section>
+
+  <!-- ============ ACCOUNT ============ -->
+  <section id="screen-account" class="screen">
+    <div class="back-row">
+      <button id="btn-back-from-account">← Accueil</button>
+    </div>
+    <div class="topbar" style="padding-top:0;">
+      <div class="wordmark"><b>Compte</b></div>
+    </div>
+
+    <div id="account-logged-out">
+      <p class="account-hint">Connecte-toi pour synchroniser tes courses entre appareils. Sans connexion, l'app reste utilisable normalement en local.</p>
+      <input type="email" id="account-email" class="account-input" placeholder="ton@email.com" autocomplete="email" inputmode="email" />
+      <button id="btn-send-magic-link" class="start-btn" style="margin-top:12px;">Envoyer le lien magique</button>
+      <div class="account-status" id="account-status"></div>
+    </div>
+
+    <div id="account-logged-in" style="display:none;">
+      <div class="account-row">
+        <div class="label">Connecté</div>
+        <div class="value" id="account-email-display">—</div>
+      </div>
+      <div class="account-row">
+        <div class="label">Dernière synchro</div>
+        <div class="value" id="account-last-sync">—</div>
+      </div>
+      <button id="btn-sync-now" class="ctrl-btn pause" style="width:100%;margin-top:16px;">Synchroniser maintenant</button>
+      <button id="btn-sign-out" class="delete-run" style="width:100%;margin-top:22px;">Se déconnecter</button>
+    </div>
   </section>
 
   <div class="tabbar">
@@ -199,6 +241,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
