@@ -585,6 +585,15 @@ button:focus-visible, a:focus-visible {
 /* ---------- ACCOUNT ---------- */
 #screen-account { padding: 0 20px 28px; gap: 16px; }
 .account-hint { color: var(--ink-dim); font-size: 13.5px; line-height: 1.5; margin: 4px 0 4px; }
+.account-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 6px 2px;
+}
 .account-input {
   width: 100%;
   padding: 14px 16px;
