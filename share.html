@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Course partagée — Splits</title>
+<meta name="theme-color" content="#171b1f" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  #share-app { max-width:480px; margin:0 auto; padding:24px 20px 40px; }
+  #share-map { width:100%; height:220px; border-radius:14px; border:1px solid var(--line); overflow:hidden; margin-top:16px; }
+  .share-loading, .share-error { text-align:center; color:var(--ink-faint); padding:60px 20px; font-family:var(--mono); font-size:13px; }
+</style>
+</head>
+<body>
+<div id="share-app">
+  <div class="topbar" style="padding:0 0 10px;">
+    <div class="wordmark"><b>Splits</b> · course partagée</div>
+  </div>
+  <div id="share-loading" class="share-loading">Chargement…</div>
+  <div id="share-content" style="display:none;">
+    <div class="detail-title" id="share-date">—</div>
+    <div class="detail-hero" id="share-dist">0,00 km</div>
+    <div class="stats-grid" style="margin-top:16px;">
+      <div class="cell">
+        <div class="label">Durée</div>
+        <div class="value" id="share-duration">—</div>
+      </div>
+      <div class="cell">
+        <div class="label">Allure moy.</div>
+        <div class="value" id="share-pace">—</div>
+      </div>
+    </div>
+    <div id="share-map"></div>
+    <div class="splits-table" id="share-splits" style="margin-top:20px;"></div>
+  </div>
+  <div id="share-error" class="share-error" style="display:none;">
+    Lien invalide, révoqué ou course introuvable.
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+"use strict";
+const SUPABASE_URL = "https://fyuvconzpqglvhufixzv.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_YFi6gTCa6b6i5APTxMT6vg_x06ofpEr";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function fmtKm(m, decimals = 2) { return (m / 1000).toFixed(decimals).replace(".", ","); }
+function fmtClock(totalSec) {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = Math.floor(totalSec % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+function fmtPace(secPerKm) {
+  if (!isFinite(secPerKm) || secPerKm <= 0) return "—'—\"";
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}'${String(s).padStart(2,"0")}"`;
+}
+function fmtDateFull(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+async function loadSharedRun() {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get("id");
+  const token = params.get("t");
+  if (!id || !token) return showError();
+
+  const { data, error } = await sb.rpc("get_shared_run", { p_id: id, p_token: token });
+  if (error || !data || data.length === 0) return showError();
+
+  const row = data[0];
+  document.getElementById("share-loading").style.display = "none";
+  document.getElementById("share-content").style.display = "block";
+  document.getElementById("share-date").textContent = fmtDateFull(row.date);
+  document.getElementById("share-dist").textContent = `${fmtKm(row.distance_m)} km`;
+  document.getElementById("share-duration").textContent = fmtClock(row.duration_sec);
+  document.getElementById("share-pace").textContent = `${fmtPace(row.avg_pace_sec_per_km)} /km`;
+
+  const path = row.path || [];
+  if (path.length > 1) {
+    const map = L.map("share-map", { zoomControl: false, attributionControl: false }).setView([path[0].lat, path[0].lng], 15);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    const latlngs = path.map((p) => [p.lat, p.lng]);
+    const line = L.polyline(latlngs, { color: "#d6432e", weight: 4 }).addTo(map);
+    map.fitBounds(line.getBounds(), { padding: [16, 16] });
+  } else {
+    document.getElementById("share-map").outerHTML = `<div class="empty-state" style="margin-top:16px;">Pas de tracé GPS pour cette course.</div>`;
+  }
+
+  const splitsEl = document.getElementById("share-splits");
+  const splits = row.splits || [];
+  const maxPace = Math.max(...splits.map((s) => s.seconds), 1);
+  const minPace = Math.min(...splits.map((s) => s.seconds), maxPace);
+  splits.forEach((s) => {
+    const range = Math.max(maxPace - minPace, 1);
+    const pct = 35 + (65 * (maxPace - s.seconds)) / range;
+    const row2 = document.createElement("div");
+    row2.className = "split-row";
+    row2.innerHTML = `
+      <div class="km-idx">${s.km}</div>
+      <div class="split-bar-track"><div class="split-bar-fill" style="width:${pct}%"></div></div>
+      <div class="pace-val">${fmtPace(s.seconds)}</div>
+    `;
+    splitsEl.appendChild(row2);
+  });
+}
+function showError() {
+  document.getElementById("share-loading").style.display = "none";
+  document.getElementById("share-error").style.display = "block";
+}
+loadSharedRun();
+</script>
+</body>
+</html>

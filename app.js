@@ -2,19 +2,28 @@
 
 /* ============================================================
    SPLITS — suivi de course personnel (PWA)
-   Stockage : localStorage (rien ne quitte l'appareil)
+   Stockage local : localStorage. Sync optionnelle : Supabase.
    ============================================================ */
 
 const STORAGE_KEY = "splits.runs.v1";
 const GOAL_KEY = "splits.weeklyGoalKm.v1";
+const LAST_SYNC_KEY = "splits.lastSync.v1";
 const DEFAULT_GOAL_KM = 20;
 
 const MIN_ACCURACY_M = 30;      // ignore les points trop imprécis
 const MIN_STEP_M = 3;           // ignore le bruit GPS sous ce seuil
 
+const SUPABASE_URL = "https://fyuvconzpqglvhufixzv.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_YFi6gTCa6b6i5APTxMT6vg_x06ofpEr";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+});
+
 // ---------- state ----------
 let runs = loadRuns();
 let weeklyGoal = Number(localStorage.getItem(GOAL_KEY)) || DEFAULT_GOAL_KM;
+let currentUser = null;
+let syncing = false;
 
 let tracking = {
   active: false,
@@ -126,6 +135,15 @@ document.getElementById("btn-back-from-history").addEventListener("click", () =>
 document.getElementById("btn-back-from-detail").addEventListener("click", () => {
   showScreen("screen-history");
 });
+document.getElementById("btn-account").addEventListener("click", () => {
+  if (tracking.active) return;
+  showScreen("screen-account");
+  updateAccountUI();
+});
+document.getElementById("btn-back-from-account").addEventListener("click", () => {
+  showScreen("screen-home");
+  renderHome();
+});
 
 // ============================================================
 // HOME rendering
@@ -215,6 +233,10 @@ function markPRs() {
 // RUN DETAIL
 // ============================================================
 let detailMap = null;
+function shareUrlFor(run) {
+  const base = window.location.href.replace(/index\.html.*$/, "").replace(/\/[^\/]*$/, "/");
+  return `${base}share.html?id=${encodeURIComponent(run.id)}&t=${run.shareToken}`;
+}
 function openDetail(id) {
   const r = runs.find((x) => x.id === id);
   if (!r) return;
@@ -259,11 +281,56 @@ function openDetail(id) {
     }
   }, 50);
 
+  // ---------- partage ----------
+  const shareBtn = document.getElementById("btn-share-run");
+  const sharePanel = document.getElementById("share-panel");
+  const shareLinkText = document.getElementById("share-link-text");
+
+  function refreshShareUI() {
+    if (r.shareToken) {
+      sharePanel.style.display = "flex";
+      shareLinkText.textContent = shareUrlFor(r);
+      shareBtn.textContent = "Course partagée";
+    } else {
+      sharePanel.style.display = "none";
+      shareBtn.textContent = "Partager cette course";
+    }
+  }
+  refreshShareUI();
+
+  shareBtn.onclick = async () => {
+    if (!r.shareToken) {
+      r.shareToken = crypto.randomUUID();
+      r.updatedAt = new Date().toISOString();
+      saveRuns();
+      await pushRun(r);
+    }
+    refreshShareUI();
+    const url = shareUrlFor(r);
+    if (navigator.share) {
+      navigator.share({ title: "Ma course sur Splits", url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url).then(() => toast("Lien copié"));
+    }
+  };
+  document.getElementById("btn-copy-share").onclick = () => {
+    navigator.clipboard.writeText(shareUrlFor(r)).then(() => toast("Lien copié"));
+  };
+  document.getElementById("btn-revoke-share").onclick = async () => {
+    r.shareToken = null;
+    r.updatedAt = new Date().toISOString();
+    saveRuns();
+    await pushRun(r);
+    refreshShareUI();
+    toast("Partage désactivé");
+  };
+
   document.getElementById("btn-delete-run").onclick = () => {
     if (confirm("Supprimer définitivement cette course ?")) {
       runs = runs.filter((x) => x.id !== id);
       saveRuns();
       markPRs();
+      pushDelete(id);
       showScreen("screen-history");
       renderHistory();
       toast("Course supprimée");
@@ -448,11 +515,14 @@ function stopRun() {
     avgPaceSecPerKm,
     path: tracking.path.map((p) => ({ lat: p.lat, lng: p.lng })),
     splits: tracking.splits.map((s) => ({ km: s.km, seconds: s.seconds })),
+    updatedAt: new Date().toISOString(),
+    shareToken: null,
   };
 
   runs.unshift(run);
   saveRuns();
   markPRs();
+  pushRun(run);
 
   tracking.active = false;
   if (tracking.map) { tracking.map.remove(); tracking.map = null; }
@@ -482,6 +552,9 @@ function releaseWakeLock() {
 document.addEventListener("visibilitychange", () => {
   if (tracking.active && document.visibilityState === "visible" && !tracking.wakeLock) {
     requestWakeLock();
+  }
+  if (!tracking.active && document.visibilityState === "visible" && currentUser) {
+    syncNow({ silent: true });
   }
 });
 
@@ -545,6 +618,140 @@ unlockBtn.addEventListener("pointercancel", resetHold);
 setInterval(() => { if (tracking.active && tracking.screenLocked) updateLockReadout(); }, 1000);
 
 // ============================================================
+// SUPABASE — auth (magic link) & synchronisation
+// ============================================================
+function runToRemote(r) {
+  return {
+    id: r.id,
+    user_id: currentUser ? currentUser.id : undefined,
+    date: r.date,
+    distance_m: r.distanceM,
+    duration_sec: r.durationSec,
+    avg_pace_sec_per_km: r.avgPaceSecPerKm,
+    path: r.path,
+    splits: r.splits,
+    share_token: r.shareToken || null,
+    deleted_at: null,
+  };
+}
+function remoteToRun(row) {
+  return {
+    id: row.id,
+    date: row.date,
+    distanceM: Number(row.distance_m),
+    durationSec: Number(row.duration_sec),
+    avgPaceSecPerKm: Number(row.avg_pace_sec_per_km),
+    path: row.path || [],
+    splits: row.splits || [],
+    shareToken: row.share_token || null,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function pushRun(run) {
+  if (!currentUser) return;
+  try {
+    await sb.from("runs").upsert(runToRemote(run));
+  } catch (e) {
+    // échec silencieux — retenté au prochain syncNow()
+  }
+}
+
+async function pushDelete(runId) {
+  if (!currentUser) return;
+  try {
+    await sb.from("runs").update({ deleted_at: new Date().toISOString() }).eq("id", runId);
+  } catch (e) {}
+}
+
+async function syncNow(opts) {
+  const silent = opts && opts.silent;
+  if (!currentUser || syncing) return;
+  syncing = true;
+  try {
+    const { data, error } = await sb.from("runs").select("*").eq("user_id", currentUser.id);
+    if (error) throw error;
+
+    const remoteIds = new Set();
+    (data || []).forEach((row) => {
+      remoteIds.add(row.id);
+      if (row.deleted_at) {
+        runs = runs.filter((r) => r.id !== row.id);
+        return;
+      }
+      const local = runs.find((r) => r.id === row.id);
+      const remoteRun = remoteToRun(row);
+      if (!local) {
+        runs.push(remoteRun);
+      } else if (new Date(row.updated_at) > new Date(local.updatedAt || 0)) {
+        Object.assign(local, remoteRun);
+      }
+    });
+
+    // pousse les courses locales absentes du serveur (ex : créées hors-ligne)
+    const toPush = runs.filter((r) => !remoteIds.has(r.id));
+    for (const r of toPush) await pushRun(r);
+
+    runs.sort((a, b) => new Date(b.date) - new Date(a.date));
+    saveRuns();
+    markPRs();
+    renderHome();
+    if (document.getElementById("screen-history").classList.contains("active")) renderHistory();
+
+    localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+    updateAccountUI();
+    if (!silent) toast("Synchronisation terminée");
+  } catch (e) {
+    if (!silent) toast("Échec de la synchronisation");
+  } finally {
+    syncing = false;
+  }
+}
+
+function updateAccountUI() {
+  const loggedOut = document.getElementById("account-logged-out");
+  const loggedIn = document.getElementById("account-logged-in");
+  if (currentUser) {
+    loggedOut.style.display = "none";
+    loggedIn.style.display = "block";
+    document.getElementById("account-email-display").textContent = currentUser.email;
+    const last = localStorage.getItem(LAST_SYNC_KEY);
+    document.getElementById("account-last-sync").textContent = last ? new Date(last).toLocaleString("fr-FR") : "Jamais";
+  } else {
+    loggedOut.style.display = "block";
+    loggedIn.style.display = "none";
+  }
+}
+
+sb.auth.onAuthStateChange((event, session) => {
+  currentUser = session ? session.user : null;
+  updateAccountUI();
+  if (currentUser) syncNow({ silent: true });
+});
+
+document.getElementById("btn-send-magic-link").addEventListener("click", async () => {
+  const email = document.getElementById("account-email").value.trim();
+  const statusEl = document.getElementById("account-status");
+  if (!email) { statusEl.textContent = "Entre une adresse email."; return; }
+  statusEl.textContent = "Envoi en cours…";
+  try {
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + window.location.pathname },
+    });
+    if (error) throw error;
+    statusEl.textContent = "Lien envoyé — vérifie ta boîte mail.";
+  } catch (e) {
+    statusEl.textContent = "Erreur d'envoi. Réessaie.";
+  }
+});
+document.getElementById("btn-sign-out").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  toast("Déconnecté");
+});
+document.getElementById("btn-sync-now").addEventListener("click", () => syncNow());
+
+// ============================================================
 // init
 // ============================================================
 markPRs();
@@ -563,3 +770,9 @@ if ("geolocation" in navigator && "permissions" in navigator) {
     else if (res.state === "denied") setGpsStatus("", "GPS refusé — active-le dans les réglages");
   }).catch(() => {});
 }
+
+sb.auth.getSession().then(({ data }) => {
+  currentUser = data.session ? data.session.user : null;
+  updateAccountUI();
+  if (currentUser) syncNow({ silent: true });
+});
