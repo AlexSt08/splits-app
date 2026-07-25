@@ -133,6 +133,7 @@ document.getElementById("btn-back-from-history").addEventListener("click", () =>
   renderHome();
 });
 document.getElementById("btn-back-from-detail").addEventListener("click", () => {
+  renderHistory();
   showScreen("screen-history");
 });
 document.getElementById("btn-account").addEventListener("click", () => {
@@ -331,8 +332,8 @@ function openDetail(id) {
       saveRuns();
       markPRs();
       pushDelete(id);
-      showScreen("screen-history");
       renderHistory();
+      showScreen("screen-history");
       toast("Course supprimée");
     }
   };
