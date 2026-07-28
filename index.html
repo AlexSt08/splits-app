@@ -243,12 +243,12 @@
     <div class="back-row">
       <button id="btn-back-from-detail">← Retour</button>
     </div>
-    <div style="padding: 0 2px;">
+    <div style="padding: 0 2px; flex-shrink:0;">
       <div class="detail-title" id="detail-date">—</div>
       <div class="detail-hero" id="detail-dist">0,00 km</div>
     </div>
 
-    <div class="stats-grid">
+    <div class="stats-grid" style="flex-shrink:0;">
       <div class="cell">
         <div class="label">Durée</div>
         <div class="value" id="detail-duration">—</div>
@@ -261,17 +261,23 @@
 
     <div id="detail-map"></div>
 
-    <div>
+    <div class="detail-splits-block">
       <div class="section-head"><h2>Splits par km</h2></div>
-      <div class="splits-table" id="detail-splits"></div>
+      <div class="splits-table-wrap" id="detail-splits-wrap">
+        <div class="splits-table" id="detail-splits"></div>
+      </div>
     </div>
 
     <button class="share-run" id="btn-share-run">Partager cette course</button>
-    <div class="share-panel" id="share-panel" style="display:none;">
-      <div class="share-link" id="share-link-text"></div>
-      <div class="share-actions">
-        <button id="btn-copy-share">Copier le lien</button>
-        <button id="btn-revoke-share">Arrêter le partage</button>
+    <div class="share-status" id="share-panel" style="display:none;">
+      <span class="share-status-label">Course partagée</span>
+      <div class="share-status-actions">
+        <button id="btn-copy-share" class="icon-btn" title="Copier le lien" aria-label="Copier le lien">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        </button>
+        <button id="btn-revoke-share" class="icon-btn danger" title="Arrêter le partage" aria-label="Arrêter le partage">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
     </div>
 
