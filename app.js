@@ -32,6 +32,7 @@ let hyroxPaceFast = Number(localStorage.getItem(HYROX_PACE_FAST_KEY)) || DEFAULT
 let hyroxPaceSlow = Number(localStorage.getItem(HYROX_PACE_SLOW_KEY)) || DEFAULT_HYROX_PACE_SLOW_SEC;
 let trendsPeriod = localStorage.getItem(TRENDS_PERIOD_KEY) || "week";
 let trendsCount = Number(localStorage.getItem(TRENDS_COUNT_KEY)) || 10;
+let trendsOrigin = "history";
 let currentUser = null;
 let syncing = false;
 
@@ -296,12 +297,23 @@ document.getElementById("btn-back-from-detail").addEventListener("click", () => 
   showScreen("screen-history");
 });
 document.getElementById("btn-open-trends").addEventListener("click", () => {
+  trendsOrigin = "history";
+  showScreen("screen-trends");
+  renderTrends();
+});
+document.getElementById("btn-open-trends-home").addEventListener("click", () => {
+  trendsOrigin = "home";
   showScreen("screen-trends");
   renderTrends();
 });
 document.getElementById("btn-back-from-trends").addEventListener("click", () => {
-  showScreen("screen-history");
-  renderHistory();
+  if (trendsOrigin === "home") {
+    showScreen("screen-home");
+    renderHome();
+  } else {
+    showScreen("screen-history");
+    renderHistory();
+  }
 });
 document.querySelectorAll(".trends-toggle-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
