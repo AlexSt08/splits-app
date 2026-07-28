@@ -10,6 +10,8 @@ const GOAL_KEY = "splits.weeklyGoalKm.v1";
 const LAST_SYNC_KEY = "splits.lastSync.v1";
 const HYROX_PACE_FAST_KEY = "splits.hyroxPaceFast.v1";
 const HYROX_PACE_SLOW_KEY = "splits.hyroxPaceSlow.v1";
+const TRENDS_PERIOD_KEY = "splits.trendsPeriod.v1";
+const TRENDS_COUNT_KEY = "splits.trendsCount.v1";
 const DEFAULT_GOAL_KM = 20;
 const DEFAULT_HYROX_PACE_FAST_SEC = 330; // 5:30 /km
 const DEFAULT_HYROX_PACE_SLOW_SEC = 360; // 6:00 /km
@@ -28,6 +30,8 @@ let runs = loadRuns();
 let weeklyGoal = Number(localStorage.getItem(GOAL_KEY)) || DEFAULT_GOAL_KM;
 let hyroxPaceFast = Number(localStorage.getItem(HYROX_PACE_FAST_KEY)) || DEFAULT_HYROX_PACE_FAST_SEC;
 let hyroxPaceSlow = Number(localStorage.getItem(HYROX_PACE_SLOW_KEY)) || DEFAULT_HYROX_PACE_SLOW_SEC;
+let trendsPeriod = localStorage.getItem(TRENDS_PERIOD_KEY) || "week";
+let trendsCount = Number(localStorage.getItem(TRENDS_COUNT_KEY)) || 10;
 let currentUser = null;
 let syncing = false;
 
@@ -150,6 +154,119 @@ function updateHyroxStatus(elId, avgPaceSecPerKm, hasRuns) {
   }
 }
 
+// ---------- TENDANCES : agrégation par semaine / mois ----------
+function periodKeyFor(dateIso, period) {
+  const d = new Date(dateIso);
+  if (period === "month") {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  const dayIdx = (d.getDay() + 6) % 7; // lundi = 0
+  const monday = new Date(d);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(d.getDate() - dayIdx);
+  return monday.toISOString().slice(0, 10);
+}
+function periodLabelFor(key, period) {
+  if (period === "month") {
+    const [y, m] = key.split("-");
+    const d = new Date(Number(y), Number(m) - 1, 1);
+    return d.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
+  }
+  const d = new Date(key);
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+function buildTrendPeriods(period, count) {
+  const now = new Date();
+  const keys = [];
+  if (period === "month") {
+    for (let i = count - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+  } else {
+    const dayIdx = (now.getDay() + 6) % 7;
+    const thisMonday = new Date(now);
+    thisMonday.setHours(0, 0, 0, 0);
+    thisMonday.setDate(now.getDate() - dayIdx);
+    for (let i = count - 1; i >= 0; i--) {
+      const d = new Date(thisMonday);
+      d.setDate(thisMonday.getDate() - i * 7);
+      keys.push(d.toISOString().slice(0, 10));
+    }
+  }
+  return keys;
+}
+function aggregateByPeriod(period) {
+  const map = {};
+  runs.forEach((r) => {
+    const key = periodKeyFor(r.date, period);
+    if (!map[key]) map[key] = { distanceM: 0, durationSec: 0, count: 0 };
+    map[key].distanceM += r.distanceM;
+    map[key].durationSec += r.durationSec;
+    map[key].count += 1;
+  });
+  return map;
+}
+function renderTrendBars(containerId, values) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
+  const max = Math.max(...values.map((v) => v.value), 0.0001);
+  values.forEach((v) => {
+    const pct = v.value > 0 ? Math.max(4, (v.value / max) * 100) : 2;
+    const bar = document.createElement("div");
+    bar.className = "trend-bar";
+    bar.innerHTML = `
+      <div class="trend-bar-val">${v.display}</div>
+      <div class="trend-bar-track"><div class="trend-bar-fill" style="height:${pct}%"></div></div>
+      <div class="trend-bar-label">${v.label}</div>
+    `;
+    container.appendChild(bar);
+  });
+}
+function renderTrends() {
+  document.getElementById("trends-count-label").textContent = trendsCount;
+  document.querySelectorAll(".trends-toggle-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.period === trendsPeriod);
+  });
+
+  const map = aggregateByPeriod(trendsPeriod);
+  const keys = buildTrendPeriods(trendsPeriod, trendsCount);
+
+  const distanceValues = keys.map((k) => {
+    const agg = map[k];
+    return {
+      label: periodLabelFor(k, trendsPeriod),
+      value: agg ? agg.distanceM / 1000 : 0,
+      display: agg ? fmtKm(agg.distanceM, 1) : "0",
+    };
+  });
+  renderTrendBars("trends-bars-distance", distanceValues);
+
+  const durationValues = keys.map((k) => {
+    const agg = map[k];
+    return {
+      label: periodLabelFor(k, trendsPeriod),
+      value: agg ? agg.durationSec / 3600 : 0,
+      display: agg ? fmtDurationShort(agg.durationSec) : "0",
+    };
+  });
+  renderTrendBars("trends-bars-duration", durationValues);
+
+  // allure : on charte la vitesse (km/h) pour que "plus rapide" = barre plus haute,
+  // tout en affichant le libellé d'allure familier (mm:ss /km)
+  const paceValues = keys.map((k) => {
+    const agg = map[k];
+    if (!agg || agg.distanceM <= 0) {
+      return { label: periodLabelFor(k, trendsPeriod), value: 0, display: "—" };
+    }
+    const paceSecPerKm = agg.durationSec / (agg.distanceM / 1000);
+    const speedKmh = 3600 / paceSecPerKm;
+    return { label: periodLabelFor(k, trendsPeriod), value: speedKmh, display: fmtPace(paceSecPerKm) };
+  });
+  renderTrendBars("trends-bars-pace", paceValues);
+}
+
 // ---------- navigation ----------
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
@@ -177,6 +294,31 @@ document.getElementById("btn-back-from-history").addEventListener("click", () =>
 document.getElementById("btn-back-from-detail").addEventListener("click", () => {
   renderHistory();
   showScreen("screen-history");
+});
+document.getElementById("btn-open-trends").addEventListener("click", () => {
+  showScreen("screen-trends");
+  renderTrends();
+});
+document.getElementById("btn-back-from-trends").addEventListener("click", () => {
+  showScreen("screen-history");
+  renderHistory();
+});
+document.querySelectorAll(".trends-toggle-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    trendsPeriod = btn.dataset.period;
+    localStorage.setItem(TRENDS_PERIOD_KEY, trendsPeriod);
+    renderTrends();
+  });
+});
+document.getElementById("trends-step-minus").addEventListener("click", () => {
+  trendsCount = Math.max(1, trendsCount - 1);
+  localStorage.setItem(TRENDS_COUNT_KEY, String(trendsCount));
+  renderTrends();
+});
+document.getElementById("trends-step-plus").addEventListener("click", () => {
+  trendsCount = Math.min(52, trendsCount + 1);
+  localStorage.setItem(TRENDS_COUNT_KEY, String(trendsCount));
+  renderTrends();
 });
 document.getElementById("btn-account").addEventListener("click", () => {
   if (tracking.active) return;
