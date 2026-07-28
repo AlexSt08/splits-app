@@ -654,8 +654,8 @@ button:focus-visible, a:focus-visible {
 }
 .unlock-icon { position: relative; z-index: 2; display:flex; }
 
-/* ---------- HISTORY / DETAIL ---------- */
-#screen-history, #screen-detail { padding: 0 20px 28px; gap: 16px; }
+/* ---------- HISTORY ---------- */
+#screen-history { padding: 0 20px 28px; gap: 16px; }
 
 .stats-grid {
   display: grid;
@@ -692,25 +692,47 @@ button:focus-visible, a:focus-visible {
 }
 .back-row button { font-family: var(--mono); font-size: 13px; color: var(--ink-dim); display:flex; align-items:center; gap:6px; }
 
+/* ---------- RUN DETAIL (tient sans scroll : la zone des splits est la seule flexible) ---------- */
+#screen-detail {
+  padding: 0 20px 12px;
+  gap: 10px;
+  overflow-y: hidden;
+}
+
 .detail-title {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 11.5px;
   color: var(--ink-faint);
   letter-spacing: 0.06em;
 }
 .detail-hero {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: 46px;
+  font-size: 32px;
   font-weight: 600;
+  margin-top: 2px;
 }
 
 #detail-map {
   width: 100%;
-  height: 200px;
+  height: 160px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   overflow: hidden;
+  flex-shrink: 0;
+}
+
+.detail-splits-block {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.splits-table-wrap {
+  flex: 1;
+  min-height: 50px;
+  overflow-y: auto;
+  margin-top: 2px;
 }
 
 .splits-table { display: flex; flex-direction: column; }
@@ -719,63 +741,68 @@ button:focus-visible, a:focus-visible {
   grid-template-columns: 30px 1fr 60px;
   align-items: center;
   gap: 10px;
-  padding: 9px 2px;
+  padding: 7px 2px;
   border-bottom: 1px solid var(--line);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 .split-row:last-child { border-bottom: none; }
 .split-row .km-idx { color: var(--ink-faint); }
-.split-bar-track { height: 8px; background: var(--surface); border-radius: 4px; overflow: hidden; }
-.split-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.split-bar-track { height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+.split-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
 .split-row .pace-val { text-align: right; color: var(--ink-dim); }
 
 .delete-run {
   text-align: center;
   color: var(--ink-faint);
-  font-size: 12.5px;
-  padding: 14px;
+  font-size: 12px;
+  padding: 10px;
   font-family: var(--mono);
+  flex-shrink: 0;
 }
 .delete-run b { color: var(--accent); }
 
 .share-run {
   width: 100%;
-  padding: 14px;
+  padding: 11px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   text-align: center;
+  flex-shrink: 0;
 }
-.share-panel {
-  margin-top: 10px;
-  padding: 12px;
+
+/* encart "course partagée" : plus de lien en clair, deux boutons icônes */
+.share-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  padding: 10px 12px;
+  flex-shrink: 0;
 }
-.share-link {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--ink-dim);
-  word-break: break-all;
-}
-.share-actions { display: flex; gap: 10px; }
-.share-actions button {
-  flex: 1;
-  padding: 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
+.share-status-label {
   font-size: 12.5px;
-  font-family: var(--mono);
-  color: var(--ink-dim);
+  font-weight: 600;
+  color: var(--ink);
 }
+.share-status-actions { display: flex; gap: 8px; }
+.icon-btn {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn.danger { color: var(--accent); }
 
 /* ---------- ACCOUNT ---------- */
 #screen-account { padding: 0 20px 28px; gap: 16px; }
