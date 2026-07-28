@@ -189,9 +189,49 @@
       <div class="hyrox-status" id="history-hyrox-status">—</div>
     </div>
 
+    <div class="section-head">
+      <h2>Tendances</h2>
+      <button class="see-all" id="btn-open-trends">Voir →</button>
+    </div>
+
     <div>
       <div class="section-head"><h2>Toutes les courses</h2></div>
       <div class="run-list" id="history-run-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ TRENDS ============ -->
+  <section id="screen-trends" class="screen">
+    <div class="back-row">
+      <button id="btn-back-from-trends">← Historique</button>
+    </div>
+    <div class="topbar" style="padding-top:0;">
+      <div class="wordmark"><b>Tendances</b></div>
+    </div>
+
+    <div class="trends-controls">
+      <div class="trends-toggle">
+        <button class="trends-toggle-btn active" data-period="week">Semaine</button>
+        <button class="trends-toggle-btn" data-period="month">Mois</button>
+      </div>
+      <div class="trends-stepper">
+        <button id="trends-step-minus">−</button>
+        <span id="trends-count-label">10</span>
+        <button id="trends-step-plus">+</button>
+      </div>
+    </div>
+
+    <div class="trends-chart">
+      <div class="trends-chart-label">Distance (km)</div>
+      <div class="trends-bars" id="trends-bars-distance"></div>
+    </div>
+    <div class="trends-chart">
+      <div class="trends-chart-label">Durée</div>
+      <div class="trends-bars" id="trends-bars-duration"></div>
+    </div>
+    <div class="trends-chart">
+      <div class="trends-chart-label">Allure (plus rapide = plus haut)</div>
+      <div class="trends-bars" id="trends-bars-pace"></div>
     </div>
   </section>
 
