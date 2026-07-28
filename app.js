@@ -512,16 +512,14 @@ function openDetail(id) {
   // ---------- partage ----------
   const shareBtn = document.getElementById("btn-share-run");
   const sharePanel = document.getElementById("share-panel");
-  const shareLinkText = document.getElementById("share-link-text");
 
   function refreshShareUI() {
     if (r.shareToken) {
+      shareBtn.style.display = "none";
       sharePanel.style.display = "flex";
-      shareLinkText.textContent = shareUrlFor(r);
-      shareBtn.textContent = "Course partagée";
     } else {
+      shareBtn.style.display = "block";
       sharePanel.style.display = "none";
-      shareBtn.textContent = "Partager cette course";
     }
   }
   refreshShareUI();
