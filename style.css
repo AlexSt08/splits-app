@@ -61,12 +61,14 @@ button:focus-visible, a:focus-visible {
   margin: 0 auto;
   min-height: 100vh;
   min-height: 100dvh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
 }
 
-.screen { display: none; flex: 1; flex-direction: column; }
+.screen { display: none; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
 .screen.active { display: flex; }
 
 /* ---------- top bar ---------- */
@@ -74,7 +76,8 @@ button:focus-visible, a:focus-visible {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 22px 20px 10px;
+  padding: 18px 20px 8px;
+  flex-shrink: 0;
 }
 .topbar .wordmark {
   font-family: var(--mono);
@@ -112,89 +115,20 @@ button:focus-visible, a:focus-visible {
 .sync-status.ok .led { background: var(--good); }
 .sync-status.ok #sync-status-text { color: var(--ink-dim); }
 
-/* ---------- HOME ---------- */
-#screen-home { padding: 0 20px 28px; gap: 26px; }
-
-.hero-stat {
-  margin-top: 8px;
-}
-.hero-stat .eyebrow {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-}
-.hero-stat .big {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 64px;
-  line-height: 1;
-  font-weight: 600;
-  margin-top: 6px;
-  letter-spacing: -0.02em;
-}
-.hero-stat .big span { font-size: 26px; color: var(--ink-dim); font-weight: 500; }
-
-.summary-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.summary-cell {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 12px 10px;
-}
-.summary-cell .label {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-.summary-cell .value {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 19px;
-  margin-top: 4px;
-  color: var(--ink);
-}
-
-.start-btn {
-  width: 100%;
-  padding: 20px;
-  background: var(--accent);
-  color: #fff;
-  border-radius: var(--radius);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  transition: transform .12s ease, background .12s ease;
-}
-.start-btn:active { transform: scale(0.98); background: #c13a27; }
-.start-btn .dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: #fff;
-}
-
+/* GPS status : ici affiché empilé sous le statut de synchro dans le topbar */
 .gps-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 10.5px;
   color: var(--ink-faint);
-  justify-content: center;
+  margin-top: 4px;
 }
 .gps-status .led {
-  width: 7px; height: 7px; border-radius: 50%;
+  width: 6px; height: 6px; border-radius: 50%;
   background: var(--ink-faint);
+  flex-shrink: 0;
 }
 .gps-status.ok .led { background: var(--good); }
 .gps-status.searching .led { background: var(--gold); animation: pulse 1.1s ease-in-out infinite; }
@@ -203,21 +137,93 @@ button:focus-visible, a:focus-visible {
   .gps-status.searching .led { animation: none; }
 }
 
+/* ---------- HOME ---------- */
+#screen-home { padding: 0 20px 12px; gap: 12px; overflow-y: hidden; }
+
+.hero-stat { margin-top: 2px; flex-shrink: 0; }
+.hero-stat .eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.hero-stat .big {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 600;
+  margin-top: 4px;
+  letter-spacing: -0.02em;
+}
+.hero-stat .big span { font-size: 18px; color: var(--ink-dim); font-weight: 500; }
+
+.summary-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  flex-shrink: 0;
+}
+.summary-cell {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 8px;
+}
+.summary-cell .label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.summary-cell .value {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  margin-top: 3px;
+  color: var(--ink);
+}
+
+.start-btn {
+  width: 100%;
+  padding: 13px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  transition: transform .12s ease, background .12s ease;
+}
+.start-btn:active { transform: scale(0.98); background: #c13a27; }
+.start-btn .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #fff;
+}
+
 .section-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   margin-top: 4px;
+  flex-shrink: 0;
 }
 .section-head h2 {
-  font-size: 14px;
+  font-size: 12.5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-dim);
   font-weight: 600;
   margin: 0;
 }
-.section-head .see-all { font-size: 12.5px; color: var(--accent); font-weight: 600; }
+.section-head .see-all { font-size: 12px; color: var(--accent); font-weight: 600; }
 
 /* history list: results-sheet, no cards/shadows, hairline dividers */
 .run-list { display: flex; flex-direction: column; }
@@ -225,10 +231,11 @@ button:focus-visible, a:focus-visible {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 2px;
+  padding: 12px 2px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   width: 100%;
+  flex-shrink: 0;
 }
 .run-row:last-child { border-bottom: none; }
 .run-row .date {
@@ -242,17 +249,17 @@ button:focus-visible, a:focus-visible {
 .run-row .mid { flex: 1; min-width: 0; }
 .run-row .mid .dist {
   font-family: var(--mono);
-  font-size: 17px;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
 }
 .run-row .mid .pace {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--ink-faint);
   margin-top: 2px;
 }
 .run-row .time {
   font-family: var(--mono);
-  font-size: 15px;
+  font-size: 14px;
   color: var(--ink-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -272,31 +279,73 @@ button:focus-visible, a:focus-visible {
   border-radius: var(--radius-sm);
 }
 
+/* zone scrollable "Dernières courses" : remplit l'espace vertical restant,
+   entre 1 et 5 lignes visibles selon la place disponible sur l'écran ;
+   pas de bordure visible, juste un cadre de défilement invisible */
+.home-recent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.run-list-wrap {
+  flex: 1;
+  min-height: 58px;
+  max-height: 290px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+
+/* bandeau d'accès aux tendances depuis l'accueil */
+.trends-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  flex-shrink: 0;
+}
+.trends-link-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.trends-link-arrow {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* ---------- HYROX objectif ---------- */
 .hyrox-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .hyrox-card-label {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--gold);
 }
 .hyrox-card-row {
   display: flex;
-  gap: 20px;
+  gap: 16px;
 }
 .hyrox-card-cell { flex: 1; }
 .hyrox-sub {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -304,14 +353,17 @@ button:focus-visible, a:focus-visible {
 .hyrox-val {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: 17px;
-  margin-top: 3px;
+  font-size: 14px;
+  margin-top: 2px;
   color: var(--ink);
 }
 .hyrox-status {
-  font-size: 12.5px;
+  font-size: 11px;
   color: var(--ink-faint);
-  line-height: 1.4;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .hyrox-status.ok { color: var(--good); }
 .hyrox-status.warn { color: var(--accent); }
@@ -636,6 +688,7 @@ button:focus-visible, a:focus-visible {
   align-items: center;
   gap: 10px;
   padding: 18px 20px 4px;
+  flex-shrink: 0;
 }
 .back-row button { font-family: var(--mono); font-size: 13px; color: var(--ink-dim); display:flex; align-items:center; gap:6px; }
 
@@ -769,6 +822,7 @@ button:focus-visible, a:focus-visible {
   display: flex;
   border-top: 1px solid var(--line);
   background: var(--bg);
+  flex-shrink: 0;
 }
 .tabbar button {
   flex: 1;
