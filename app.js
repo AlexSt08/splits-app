@@ -84,6 +84,18 @@ function pathDistanceM(path) {
   for (let i = 1; i < path.length; i++) d += haversineM(path[i - 1], path[i]);
   return d;
 }
+// Recalcule des splits uniformes après correction/import de tracé : chaque km
+// COMPLET reçoit l'allure moyenne recalculée. Le dernier km, s'il est incomplet,
+// ne reçoit volontairement aucun split — comme pendant l'enregistrement en direct,
+// où checkSplit() n'ajoute jamais de split pour une fin de course à mi-kilomètre.
+function recomputeUniformSplits(distanceM, avgPaceSecPerKm) {
+  const fullKm = Math.floor(distanceM / 1000);
+  const splits = [];
+  for (let i = 1; i <= fullKm; i++) {
+    splits.push({ km: i, seconds: avgPaceSecPerKm });
+  }
+  return splits;
+}
 function parseKmlPath(text) {
   const parser = new DOMParser();
   const xml = parser.parseFromString(text, "application/xml");
@@ -547,18 +559,19 @@ function openDetail(id) {
   }, 50);
 
   // ---------- correction du tracé (édition sur carte + import KML) ----------
-  // Note : seules distance et allure moyenne sont recalculées. Les splits par km
-  // restent ceux enregistrés pendant la course (pas d'horodatage par point conservé).
+  // Note : distance, allure moyenne ET splits sont recalculés (splits uniformes,
+  // un par km complet, aucun split pour un dernier km incomplet — cf. recomputeUniformSplits).
   function applyPathUpdate(newPath) {
     r.path = newPath.map((p) => ({ lat: p.lat, lng: p.lng }));
     r.distanceM = pathDistanceM(newPath);
     r.avgPaceSecPerKm = r.distanceM > 0 ? r.durationSec / (r.distanceM / 1000) : 0;
+    r.splits = recomputeUniformSplits(r.distanceM, r.avgPaceSecPerKm);
     r.updatedAt = new Date().toISOString();
     saveRuns();
     markPRs();
     pushRun(r);
     openDetail(r.id); // ré-affiche avec les nouvelles valeurs
-    toast("Tracé mis à jour — distance recalculée");
+    toast("Tracé mis à jour — distance et splits recalculés");
   }
 
   function renderEditMarkers() {
