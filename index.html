@@ -261,6 +261,17 @@
 
     <div id="detail-map"></div>
 
+    <div class="track-edit-bar" id="track-edit-bar" style="display:none;">
+      <span id="track-edit-count">0 points</span>
+      <button id="btn-finish-edit">Terminer</button>
+    </div>
+
+    <div class="track-fix-actions" id="track-fix-actions">
+      <button class="fix-btn" id="btn-edit-track">Corriger le tracé</button>
+      <button class="fix-btn" id="btn-import-track">Importer un KML</button>
+      <input type="file" id="import-kml-input" accept=".kml" style="display:none;" />
+    </div>
+
     <div class="detail-splits-block">
       <div class="section-head"><h2>Splits par km</h2></div>
       <div class="splits-table-wrap" id="detail-splits-wrap">

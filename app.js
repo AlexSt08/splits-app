@@ -79,6 +79,27 @@ function haversineM(a, b) {
     Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s1));
 }
+function pathDistanceM(path) {
+  let d = 0;
+  for (let i = 1; i < path.length; i++) d += haversineM(path[i - 1], path[i]);
+  return d;
+}
+function parseKmlPath(text) {
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(text, "application/xml");
+  const coordsEl = xml.querySelector("coordinates");
+  if (!coordsEl) return null;
+  const raw = coordsEl.textContent.trim();
+  return raw
+    .split(/\s+/)
+    .map((triplet) => {
+      const parts = triplet.split(",");
+      const lng = Number(parts[0]);
+      const lat = Number(parts[1]);
+      return { lat, lng };
+    })
+    .filter((p) => isFinite(p.lat) && isFinite(p.lng));
+}
 
 function fmtKm(m, decimals = 2) {
   return (m / 1000).toFixed(decimals).replace(".", ",");
@@ -461,10 +482,20 @@ function markPRs() {
 // RUN DETAIL
 // ============================================================
 let detailMap = null;
+let detailLine = null;
+let editingPath = null;
+let editMarkers = [];
+
 function shareUrlFor(run) {
   const base = window.location.href.replace(/index\.html.*$/, "").replace(/\/[^\/]*$/, "/");
   return `${base}share.html?id=${encodeURIComponent(run.id)}&t=${run.shareToken}`;
 }
+
+function clearEditMarkers() {
+  editMarkers.forEach((m) => { if (detailMap) detailMap.removeLayer(m); });
+  editMarkers = [];
+}
+
 function openDetail(id) {
   const r = runs.find((x) => x.id === id);
   if (!r) return;
@@ -495,19 +526,94 @@ function openDetail(id) {
 
   showScreen("screen-detail");
 
+  // reset édition tracé (au cas où on arrive d'un autre détail resté en cours d'édition)
+  editingPath = null;
+  clearEditMarkers();
+  document.getElementById("track-edit-bar").style.display = "none";
+  document.getElementById("track-fix-actions").style.display = "flex";
+
   setTimeout(() => {
     const mapEl = document.getElementById("detail-map");
-    if (detailMap) { detailMap.remove(); detailMap = null; }
+    if (detailMap) { detailMap.remove(); detailMap = null; detailLine = null; }
     if (r.path && r.path.length > 1) {
       detailMap = L.map(mapEl, { zoomControl: false, attributionControl: false }).setView([r.path[0].lat, r.path[0].lng], 15);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(detailMap);
       const latlngs = r.path.map((p) => [p.lat, p.lng]);
-      const line = L.polyline(latlngs, { color: "#d6432e", weight: 4 }).addTo(detailMap);
-      detailMap.fitBounds(line.getBounds(), { padding: [16, 16] });
+      detailLine = L.polyline(latlngs, { color: "#d6432e", weight: 4 }).addTo(detailMap);
+      detailMap.fitBounds(detailLine.getBounds(), { padding: [16, 16] });
     } else {
       mapEl.innerHTML = `<div class="empty-state" style="border:none;">Pas de tracé GPS pour cette course.</div>`;
     }
   }, 50);
+
+  // ---------- correction du tracé (édition sur carte + import KML) ----------
+  // Note : seules distance et allure moyenne sont recalculées. Les splits par km
+  // restent ceux enregistrés pendant la course (pas d'horodatage par point conservé).
+  function applyPathUpdate(newPath) {
+    r.path = newPath.map((p) => ({ lat: p.lat, lng: p.lng }));
+    r.distanceM = pathDistanceM(newPath);
+    r.avgPaceSecPerKm = r.distanceM > 0 ? r.durationSec / (r.distanceM / 1000) : 0;
+    r.updatedAt = new Date().toISOString();
+    saveRuns();
+    markPRs();
+    pushRun(r);
+    openDetail(r.id); // ré-affiche avec les nouvelles valeurs
+    toast("Tracé mis à jour — distance recalculée");
+  }
+
+  function renderEditMarkers() {
+    clearEditMarkers();
+    editingPath.forEach((p, idx) => {
+      const marker = L.circleMarker([p.lat, p.lng], {
+        radius: 5, color: "#d6432e", weight: 2, fillColor: "#d6432e", fillOpacity: 0.9,
+      });
+      marker.on("click", () => {
+        if (editingPath.length <= 2) { toast("Il faut garder au moins 2 points."); return; }
+        editingPath.splice(idx, 1);
+        if (detailLine) detailLine.setLatLngs(editingPath.map((p2) => [p2.lat, p2.lng]));
+        renderEditMarkers();
+      });
+      marker.addTo(detailMap);
+      editMarkers.push(marker);
+    });
+    document.getElementById("track-edit-count").textContent = `${editingPath.length} points`;
+  }
+
+  document.getElementById("btn-edit-track").onclick = () => {
+    if (!r.path || r.path.length < 2) { toast("Pas de tracé GPS à corriger."); return; }
+    if (!detailMap) { toast("Carte pas encore prête, réessaie."); return; }
+    editingPath = r.path.map((p) => ({ ...p }));
+    document.getElementById("track-edit-bar").style.display = "flex";
+    document.getElementById("track-fix-actions").style.display = "none";
+    renderEditMarkers();
+  };
+
+  document.getElementById("btn-finish-edit").onclick = () => {
+    if (!editingPath) return;
+    const finalPath = editingPath;
+    document.getElementById("track-edit-bar").style.display = "none";
+    document.getElementById("track-fix-actions").style.display = "flex";
+    clearEditMarkers();
+    editingPath = null;
+    applyPathUpdate(finalPath);
+  };
+
+  document.getElementById("btn-import-track").onclick = () => {
+    document.getElementById("import-kml-input").click();
+  };
+  document.getElementById("import-kml-input").onchange = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const path = parseKmlPath(text);
+      if (!path || path.length < 2) { toast("KML illisible ou vide."); return; }
+      applyPathUpdate(path);
+    } catch (err) {
+      toast("Erreur d'import du fichier KML");
+    }
+  };
 
   // ---------- partage ----------
   const shareBtn = document.getElementById("btn-share-run");

@@ -722,6 +722,47 @@ button:focus-visible, a:focus-visible {
   flex-shrink: 0;
 }
 
+/* barre affichée pendant l'édition du tracé (mode correction) */
+.track-edit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  flex-shrink: 0;
+}
+.track-edit-bar button {
+  background: var(--accent);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* boutons "Corriger le tracé" / "Importer un KML" */
+.track-fix-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.fix-btn {
+  flex: 1;
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-dim);
+  font-size: 11.5px;
+  font-family: var(--mono);
+  text-align: center;
+}
+
 .detail-splits-block {
   display: flex;
   flex-direction: column;
