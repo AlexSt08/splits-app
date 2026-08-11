@@ -21,8 +21,8 @@ const DEFAULT_HYROX_PACE_SLOW_SEC = 360; // 6:00 /km
 const MIN_ACCURACY_M = 30;      // ignore les points trop imprécis
 const MIN_STEP_M = 3;           // ignore le bruit GPS sous ce seuil
 
-// zone EF par défaut (7:05–8:16/km), utilisée pour l'échauffement et le retour
-// au calme des séances fractionnées quand aucune allure spécifique n'est donnée
+// zone EF par défaut (7:05–8:16/km) proposée comme valeur de départ dans le
+// formulaire d'édition d'une étape "continue"
 const EF_ZONE = { min: 425, max: 496 };
 
 const SUPABASE_URL = "https://fyuvconzpqglvhufixzv.supabase.co";
@@ -32,31 +32,67 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ============================================================
-// PROGRAMME D'ENTRAÎNEMENT — Bloc 1 (VMA 12,1 km/h), modifiable via l'écran Programme
+// PROGRAMME D'ENTRAÎNEMENT — Bloc 1 (VMA 12,1 km/h)
+// Chaque séance = liste d'étapes ordonnées. Deux types d'étape :
+//  - "continu"      : { label, durationSec, paceMinSec, paceMaxSec }
+//  - "repetitions"   : { label, sets, reps, workSec, workPaceMinSec,
+//                        workPaceMaxSec, restSec, restBetweenSetsSec, restLabel }
 // ============================================================
 const DEFAULT_TRAINING_PLAN = {
   name: "Bloc 1 — VMA 12,1 km/h",
   weeks: [
     { week: 1, label: "S1 · Mise en route", sessions: [
-      { id: "s1-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "35' EF en continu" },
-      { id: "s1-2", name: "Fractionné court", type: "interval", warmupSec: 900, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 5, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, note: "5×1' à 5:50/km, récup 1' trot" },
+      { id: "s1-1", name: "Endurance", steps: [
+        { type: "continu", label: "Endurance fondamentale", durationSec: 2100, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
+      { id: "s1-2", name: "Fractionné court", steps: [
+        { type: "continu", label: "Échauffement", durationSec: 900, paceMinSec: 425, paceMaxSec: 496 },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 5, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, restBetweenSetsSec: 0, restLabel: "Récupération" },
+        { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
     ]},
     { week: 2, label: "S2 · Montée en volume", sessions: [
-      { id: "s2-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "40' EF en continu" },
-      { id: "s2-2", name: "Fractionné court", type: "interval", warmupSec: 900, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 8, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, note: "8×1' à 5:50/km, récup 1' trot" },
+      { id: "s2-1", name: "Endurance", steps: [
+        { type: "continu", label: "Endurance fondamentale", durationSec: 2400, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
+      { id: "s2-2", name: "Fractionné court", steps: [
+        { type: "continu", label: "Échauffement", durationSec: 900, paceMinSec: 425, paceMaxSec: 496 },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 8, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, restBetweenSetsSec: 0, restLabel: "Récupération" },
+        { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
     ]},
     { week: 3, label: "S3 · Choc VMA", sessions: [
-      { id: "s3-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "45' EF en continu" },
-      { id: "s3-2", name: "30/30", type: "interval", warmupSec: 600, cooldownSec: 600, sets: 2, restBetweenSetsSec: 90, reps: 6, workSec: 30, workPaceMinSec: 283, workPaceMaxSec: 298, restSec: 30, note: "2×(6×30″ à 4:58-4:43/km)" },
+      { id: "s3-1", name: "Endurance", steps: [
+        { type: "continu", label: "Endurance fondamentale", durationSec: 2700, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
+      { id: "s3-2", name: "30/30", steps: [
+        { type: "continu", label: "Échauffement", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
+        { type: "repetitions", label: "30/30", sets: 2, reps: 6, workSec: 30, workPaceMinSec: 283, workPaceMaxSec: 298, restSec: 30, restBetweenSetsSec: 90, restLabel: "Récupération" },
+        { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
     ]},
     { week: 4, label: "S4 · Semaine la plus chargée", sessions: [
-      { id: "s4-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "50' EF en continu" },
-      { id: "s4-2", name: "Fractionné moyen", type: "interval", warmupSec: 600, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 5, workSec: 120, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 90, note: "5×2' à 5:50/km, récup active" },
-      { id: "s4-3", name: "Endurance légère", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "30' EF en continu" },
+      { id: "s4-1", name: "Endurance", steps: [
+        { type: "continu", label: "Endurance fondamentale", durationSec: 3000, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
+      { id: "s4-2", name: "Fractionné moyen", steps: [
+        { type: "continu", label: "Échauffement", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 5, workSec: 120, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 90, restBetweenSetsSec: 0, restLabel: "Récup active" },
+        { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
+      { id: "s4-3", name: "Endurance légère", steps: [
+        { type: "continu", label: "Endurance légère", durationSec: 1800, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
     ]},
     { week: 5, label: "S5 · Consolidation", sessions: [
-      { id: "s5-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "55' EF en continu" },
-      { id: "s5-2", name: "Fractionné long", type: "interval", warmupSec: 900, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 4, workSec: 180, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 120, note: "4×3' à 5:50/km, récup active" },
+      { id: "s5-1", name: "Endurance", steps: [
+        { type: "continu", label: "Endurance fondamentale", durationSec: 3300, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
+      { id: "s5-2", name: "Fractionné long", steps: [
+        { type: "continu", label: "Échauffement", durationSec: 900, paceMinSec: 425, paceMaxSec: 496 },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 4, workSec: 180, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 120, restBetweenSetsSec: 0, restLabel: "Récup active" },
+        { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
+      ]},
     ]},
   ],
 };
@@ -64,7 +100,16 @@ const DEFAULT_TRAINING_PLAN = {
 function loadTrainingPlan() {
   try {
     const raw = localStorage.getItem(TRAINING_PLAN_KEY);
-    return raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_TRAINING_PLAN));
+    if (!raw) return JSON.parse(JSON.stringify(DEFAULT_TRAINING_PLAN));
+    const parsed = JSON.parse(raw);
+    const isOldFormat = !parsed.weeks || parsed.weeks.some((w) => w.sessions.some((s) => !s.steps));
+    if (isOldFormat) {
+      // Plan enregistré avant la refonte en étapes : on repart du Bloc 1 à jour.
+      // trainingDone (coches "fait") est stocké séparément par id de séance,
+      // donc il reste valable puisque les id ne changent pas.
+      return JSON.parse(JSON.stringify(DEFAULT_TRAINING_PLAN));
+    }
+    return parsed;
   } catch (e) {
     return JSON.parse(JSON.stringify(DEFAULT_TRAINING_PLAN));
   }
@@ -101,10 +146,12 @@ let trendsOrigin = "history";
 let trainingPlan = loadTrainingPlan();
 let trainingDone = loadTrainingDone();
 let activeSession = null;   // séance du programme sélectionnée pour la prochaine course
+let editingSessionId = null; // séance en cours d'édition sur l'écran Programme
+let editingSteps = null;     // copie de travail des étapes pendant l'édition
 let currentUser = null;
 let syncing = false;
 
-// ---------- moteur de phases (séances fractionnées) ----------
+// ---------- moteur de phases (séances du programme) ----------
 let phaseSequence = [];
 let phaseIndex = -1;
 let paceAlertState = "in"; // "in" | "out" — déclenchement uniquement au changement d'état
@@ -245,7 +292,7 @@ function speak(text) {
 
 // ---------- HYROX target helpers ----------
 function parseMMSS(str) {
-  const m = String(str || "").trim().match(/^(\d{1,2}):([0-5]?\d)$/);
+  const m = String(str || "").trim().match(/^(\d{1,3}):([0-5]?\d)$/);
   if (!m) return null;
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
@@ -392,7 +439,9 @@ function renderTrends() {
   renderTrendBars("trends-bars-pace", paceValues);
 }
 
-// ---------- PROGRAMME : rendu et édition ----------
+// ============================================================
+// PROGRAMME : rendu, édition inline (formulaire) et JSON
+// ============================================================
 function updateActiveSessionBadge() {
   const badge = document.getElementById("active-session-badge");
   if (activeSession) {
@@ -402,6 +451,91 @@ function updateActiveSessionBadge() {
     badge.style.display = "none";
   }
 }
+
+function stepSummary(step) {
+  if (step.type === "continu") {
+    return `${formatMMSS(step.durationSec || 0)} · ${fmtPace(step.paceMinSec)}–${fmtPace(step.paceMaxSec)}/km`;
+  }
+  const setsPart = (step.sets || 1) > 1 ? `${step.sets}×` : "";
+  return `${setsPart}${step.reps}×${formatMMSS(step.workSec || 0)} à ${fmtPace(step.workPaceMinSec)}–${fmtPace(step.workPaceMaxSec)}/km · récup ${formatMMSS(step.restSec || 0)}`;
+}
+
+function stepEditorRowHTML(step, i) {
+  const isRep = step.type === "repetitions";
+  return `
+    <div class="step-edit-row">
+      <div class="step-edit-head">
+        <select class="step-type account-input" data-i="${i}">
+          <option value="continu" ${!isRep ? "selected" : ""}>Continue</option>
+          <option value="repetitions" ${isRep ? "selected" : ""}>Répétitions</option>
+        </select>
+        <div class="step-edit-arrows">
+          <button type="button" data-action="step-up" data-i="${i}" title="Monter">↑</button>
+          <button type="button" data-action="step-down" data-i="${i}" title="Descendre">↓</button>
+          <button type="button" data-action="del-step" data-i="${i}" title="Supprimer">✕</button>
+        </div>
+      </div>
+      <input class="step-label account-input" data-i="${i}" placeholder="Libellé (ex. Échauffement)" value="${(step.label || "").replace(/"/g, "&quot;")}" />
+      ${!isRep ? `
+        <div class="step-fields-row">
+          <input class="step-duration account-input" data-i="${i}" placeholder="Durée mm:ss" value="${formatMMSS(step.durationSec || 0)}" />
+          <input class="step-pace-min account-input" data-i="${i}" placeholder="Allure rapide" value="${formatMMSS(step.paceMinSec != null ? step.paceMinSec : EF_ZONE.min)}" />
+          <input class="step-pace-max account-input" data-i="${i}" placeholder="Allure lente" value="${formatMMSS(step.paceMaxSec != null ? step.paceMaxSec : EF_ZONE.max)}" />
+        </div>
+      ` : `
+        <div class="step-fields-row">
+          <input class="step-sets account-input" data-i="${i}" type="number" min="1" placeholder="Séries" value="${step.sets || 1}" />
+          <input class="step-reps account-input" data-i="${i}" type="number" min="1" placeholder="Répétitions" value="${step.reps || 1}" />
+          <input class="step-worksec account-input" data-i="${i}" placeholder="Durée mm:ss" value="${formatMMSS(step.workSec || 60)}" />
+        </div>
+        <div class="step-fields-row">
+          <input class="step-pace-min account-input" data-i="${i}" placeholder="Allure rapide" value="${formatMMSS(step.workPaceMinSec != null ? step.workPaceMinSec : 340)}" />
+          <input class="step-pace-max account-input" data-i="${i}" placeholder="Allure lente" value="${formatMMSS(step.workPaceMaxSec != null ? step.workPaceMaxSec : 360)}" />
+          <input class="step-restsec account-input" data-i="${i}" placeholder="Récup mm:ss" value="${formatMMSS(step.restSec || 60)}" />
+        </div>
+        <input class="step-restbetween account-input" data-i="${i}" placeholder="Récup entre séries mm:ss (si plusieurs séries)" value="${formatMMSS(step.restBetweenSetsSec || 0)}" />
+      `}
+    </div>
+  `;
+}
+
+function collectStepsFromForm() {
+  const rows = document.querySelectorAll(".step-edit-row");
+  return Array.from(rows).map((row) => {
+    const type = row.querySelector(".step-type").value;
+    const label = row.querySelector(".step-label").value.trim();
+    if (type === "continu") {
+      return {
+        type: "continu",
+        label,
+        durationSec: parseMMSS(row.querySelector(".step-duration").value) || 0,
+        paceMinSec: parseMMSS(row.querySelector(".step-pace-min").value) || EF_ZONE.min,
+        paceMaxSec: parseMMSS(row.querySelector(".step-pace-max").value) || EF_ZONE.max,
+      };
+    }
+    return {
+      type: "repetitions",
+      label,
+      sets: Math.max(1, parseInt(row.querySelector(".step-sets").value, 10) || 1),
+      reps: Math.max(1, parseInt(row.querySelector(".step-reps").value, 10) || 1),
+      workSec: parseMMSS(row.querySelector(".step-worksec").value) || 60,
+      workPaceMinSec: parseMMSS(row.querySelector(".step-pace-min").value) || 340,
+      workPaceMaxSec: parseMMSS(row.querySelector(".step-pace-max").value) || 360,
+      restSec: parseMMSS(row.querySelector(".step-restsec").value) || 60,
+      restBetweenSetsSec: parseMMSS(row.querySelector(".step-restbetween").value) || 0,
+      restLabel: "Récupération",
+    };
+  });
+}
+
+function startEditSession(id) {
+  const session = findSessionById(id);
+  if (!session) return;
+  editingSessionId = id;
+  editingSteps = JSON.parse(JSON.stringify(session.steps || []));
+  renderProgram();
+}
+
 function renderProgram() {
   document.getElementById("program-block-name").textContent = trainingPlan.name || "Programme";
   const list = document.getElementById("program-list");
@@ -414,72 +548,156 @@ function renderProgram() {
     header.className = "program-week-label";
     header.textContent = `${w.label} · ${doneCount}/${w.sessions.length}`;
     weekEl.appendChild(header);
+
     w.sessions.forEach((s) => {
       const card = document.createElement("div");
       card.className = "program-session" + (trainingDone[s.id] ? " done" : "");
-      const paceLabel = s.type === "endurance"
-        ? `${fmtPace(s.paceMinSec)}–${fmtPace(s.paceMaxSec)} /km`
-        : `${fmtPace(s.workPaceMinSec)}–${fmtPace(s.workPaceMaxSec)} /km`;
-      card.innerHTML = `
-        <div class="program-session-top">
-          <div class="program-session-name">${s.name}</div>
-          <button class="program-check" data-id="${s.id}">${trainingDone[s.id] ? "✓ Fait" : "Marquer fait"}</button>
-        </div>
-        <div class="program-session-note">${s.note || ""}</div>
-        <div class="program-session-pace">${paceLabel}</div>
-        <button class="program-start" data-id="${s.id}">Démarrer cette séance</button>
-      `;
+
+      if (s.id === editingSessionId) {
+        card.innerHTML = `
+          <div class="program-session-top">
+            <div class="program-session-name">${s.name}</div>
+          </div>
+          ${editingSteps.map((st, i) => stepEditorRowHTML(st, i)).join("")}
+          <button type="button" class="fix-btn" data-action="add-step">+ Ajouter une étape</button>
+          <div class="program-session-actions">
+            <button type="button" class="program-start" data-action="save-session-edit">Enregistrer</button>
+            <button type="button" class="fix-btn" data-action="cancel-session-edit">Annuler</button>
+          </div>
+        `;
+      } else {
+        card.innerHTML = `
+          <div class="program-session-top">
+            <div class="program-session-name">${s.name}</div>
+            <button class="program-check" data-action="check" data-id="${s.id}">${trainingDone[s.id] ? "✓ Fait" : "Marquer fait"}</button>
+          </div>
+          <div class="program-steps">
+            ${(s.steps || []).map((st) => `
+              <div class="program-step-row">
+                <span class="program-step-label">${st.label || (st.type === "continu" ? "Continue" : "Répétitions")}</span>
+                <span class="program-step-summary">${stepSummary(st)}</span>
+              </div>
+            `).join("")}
+          </div>
+          <div class="program-session-actions">
+            <button class="program-start" data-action="start" data-id="${s.id}">Démarrer</button>
+            <button class="fix-btn" data-action="edit-session" data-id="${s.id}">Modifier</button>
+          </div>
+        `;
+      }
       weekEl.appendChild(card);
     });
     list.appendChild(weekEl);
   });
-  list.querySelectorAll(".program-check").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.id;
-      if (trainingDone[id]) delete trainingDone[id];
-      else trainingDone[id] = new Date().toISOString();
-      saveTrainingDone(trainingDone);
-      renderProgram();
-    });
-  });
-  list.querySelectorAll(".program-start").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const session = findSessionById(btn.dataset.id);
-      if (!session) return;
-      activeSession = session;
-      updateActiveSessionBadge();
-      showScreen("screen-home");
-      toast(`Séance "${session.name}" sélectionnée — appuie sur Démarrer`);
-    });
-  });
 }
 
+document.getElementById("program-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+
+  if (action === "check") {
+    const id = btn.dataset.id;
+    if (trainingDone[id]) delete trainingDone[id];
+    else trainingDone[id] = new Date().toISOString();
+    saveTrainingDone(trainingDone);
+    renderProgram();
+  } else if (action === "start") {
+    const session = findSessionById(btn.dataset.id);
+    if (!session) return;
+    activeSession = session;
+    updateActiveSessionBadge();
+    showScreen("screen-home");
+    toast(`Séance "${session.name}" sélectionnée — appuie sur Démarrer`);
+  } else if (action === "edit-session") {
+    startEditSession(btn.dataset.id);
+  } else if (action === "cancel-session-edit") {
+    editingSessionId = null;
+    editingSteps = null;
+    renderProgram();
+  } else if (action === "save-session-edit") {
+    const steps = collectStepsFromForm();
+    if (steps.length === 0) { toast("Ajoute au moins une étape."); return; }
+    const session = findSessionById(editingSessionId);
+    if (session) {
+      session.steps = steps;
+      saveTrainingPlan(trainingPlan);
+      toast("Séance mise à jour");
+    }
+    editingSessionId = null;
+    editingSteps = null;
+    renderProgram();
+  } else if (action === "add-step") {
+    editingSteps.push({ type: "continu", label: "", durationSec: 600, paceMinSec: EF_ZONE.min, paceMaxSec: EF_ZONE.max });
+    renderProgram();
+  } else if (action === "del-step") {
+    editingSteps.splice(Number(btn.dataset.i), 1);
+    renderProgram();
+  } else if (action === "step-up") {
+    const i = Number(btn.dataset.i);
+    if (i > 0) {
+      [editingSteps[i - 1], editingSteps[i]] = [editingSteps[i], editingSteps[i - 1]];
+      renderProgram();
+    }
+  } else if (action === "step-down") {
+    const i = Number(btn.dataset.i);
+    if (i < editingSteps.length - 1) {
+      [editingSteps[i + 1], editingSteps[i]] = [editingSteps[i], editingSteps[i + 1]];
+      renderProgram();
+    }
+  }
+});
+document.getElementById("program-list").addEventListener("change", (e) => {
+  if (!e.target.classList.contains("step-type")) return;
+  const i = Number(e.target.dataset.i);
+  const label = editingSteps[i].label;
+  editingSteps[i] = e.target.value === "continu"
+    ? { type: "continu", label, durationSec: 600, paceMinSec: EF_ZONE.min, paceMaxSec: EF_ZONE.max }
+    : { type: "repetitions", label, sets: 1, reps: 5, workSec: 60, workPaceMinSec: 340, workPaceMaxSec: 360, restSec: 60, restBetweenSetsSec: 0, restLabel: "Récupération" };
+  renderProgram();
+});
+
 // ============================================================
-// PHASE ENGINE (séances fractionnées) & alerte d'allure
+// PHASE ENGINE (déroulé d'une séance) & alerte d'allure
 // ============================================================
 function buildPhaseSequence(session) {
   const phases = [];
-  if (session.warmupSec) phases.push({ kind: "warmup", label: "Échauffement", durationSec: session.warmupSec });
-  const sets = session.sets || 1;
-  for (let set = 1; set <= sets; set++) {
-    for (let rep = 1; rep <= session.reps; rep++) {
-      phases.push({
-        kind: "work", label: "Allure rapide", durationSec: session.workSec,
-        paceMinSec: session.workPaceMinSec, paceMaxSec: session.workPaceMaxSec,
-        rep, totalReps: session.reps, set, totalSets: sets,
-      });
-      const isLastRepOfSet = rep === session.reps;
-      const isLastSet = set === sets;
-      if (!(isLastRepOfSet && isLastSet)) {
-        if (isLastRepOfSet && !isLastSet) {
-          phases.push({ kind: "restSet", label: "Récup entre séries", durationSec: session.restBetweenSetsSec || 0 });
-        } else {
-          phases.push({ kind: "rest", label: "Récupération", durationSec: session.restSec });
+  (session.steps || []).forEach((step) => {
+    if (step.type === "continu") {
+      if (step.durationSec > 0) {
+        phases.push({
+          kind: "continu",
+          label: step.label || "Continu",
+          durationSec: step.durationSec,
+          paceMinSec: step.paceMinSec,
+          paceMaxSec: step.paceMaxSec,
+        });
+      }
+    } else if (step.type === "repetitions") {
+      const sets = step.sets || 1;
+      for (let set = 1; set <= sets; set++) {
+        for (let rep = 1; rep <= step.reps; rep++) {
+          phases.push({
+            kind: "work",
+            label: step.label || "Allure rapide",
+            durationSec: step.workSec,
+            paceMinSec: step.workPaceMinSec,
+            paceMaxSec: step.workPaceMaxSec,
+            rep, totalReps: step.reps, set, totalSets: sets,
+          });
+          const isLastRepOfSet = rep === step.reps;
+          const isLastSet = set === sets;
+          if (!(isLastRepOfSet && isLastSet)) {
+            if (isLastRepOfSet && !isLastSet) {
+              phases.push({ kind: "restSet", label: "Récup entre séries", durationSec: step.restBetweenSetsSec || 0 });
+            } else {
+              phases.push({ kind: "rest", label: step.restLabel || "Récupération", durationSec: step.restSec });
+            }
+          }
         }
       }
     }
-  }
-  if (session.cooldownSec) phases.push({ kind: "cooldown", label: "Retour au calme", durationSec: session.cooldownSec });
+  });
   return phases.filter((p) => p.durationSec > 0);
 }
 
@@ -521,15 +739,13 @@ function tickPhase() {
   }
 }
 
+// Zone d'allure de la phase en cours — chaque étape (continue ou répétitions)
+// porte désormais sa propre allure, plus de zone par défaut au niveau séance.
 function getCurrentTargetZone() {
-  if (!activeSession) return null;
-  if (activeSession.type === "endurance") {
-    return { min: activeSession.paceMinSec, max: activeSession.paceMaxSec };
-  }
-  if (activeSession.type === "interval" && phaseIndex >= 0 && phaseIndex < phaseSequence.length) {
-    const phase = phaseSequence[phaseIndex];
-    if (phase.kind === "work") return { min: phase.paceMinSec, max: phase.paceMaxSec };
-    if (phase.kind === "warmup" || phase.kind === "cooldown") return EF_ZONE;
+  if (phaseIndex < 0 || phaseIndex >= phaseSequence.length) return null;
+  const phase = phaseSequence[phaseIndex];
+  if ((phase.kind === "continu" || phase.kind === "work") && phase.paceMinSec != null && phase.paceMaxSec != null) {
+    return { min: phase.paceMinSec, max: phase.paceMaxSec };
   }
   return null;
 }
@@ -570,6 +786,8 @@ document.querySelectorAll(".tabbar button").forEach((btn) => {
     } else if (tab === "program") {
       showScreen("screen-program");
       document.getElementById("program-editor").style.display = "none";
+      editingSessionId = null;
+      editingSteps = null;
       renderProgram();
     }
   });
@@ -1014,16 +1232,13 @@ function startRun() {
   setGpsStatus("searching", "Recherche du signal…");
 
   paceAlertState = "in";
-  if (activeSession && activeSession.type === "interval") {
-    phaseSequence = buildPhaseSequence(activeSession);
-    phaseIndex = -1;
+  phaseSequence = activeSession ? buildPhaseSequence(activeSession) : [];
+  phaseIndex = -1;
+  if (phaseSequence.length > 0) {
     document.getElementById("phase-bar").style.display = "flex";
     advancePhase();
   } else {
-    phaseSequence = [];
-    phaseIndex = -1;
     document.getElementById("phase-bar").style.display = "none";
-    if (activeSession) speak(`Séance ${activeSession.name} démarrée`);
   }
 
   tracking.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {

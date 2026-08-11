@@ -413,7 +413,7 @@ button:focus-visible, a:focus-visible {
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 8px;
 }
 .program-session.done { border-color: var(--good); }
@@ -434,15 +434,29 @@ button:focus-visible, a:focus-visible {
   flex-shrink: 0;
 }
 .program-session.done .program-check { color: var(--good); border-color: var(--good); }
-.program-session-note { font-size: 12.5px; color: var(--ink-dim); line-height: 1.4; }
-.program-session-pace {
+
+.program-steps { display: flex; flex-direction: column; gap: 4px; }
+.program-step-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 12px;
+}
+.program-step-row:last-child { border-bottom: none; }
+.program-step-label { color: var(--ink-dim); font-weight: 600; flex-shrink: 0; }
+.program-step-summary {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: 12.5px;
   color: var(--gold);
+  text-align: right;
 }
+
+.program-session-actions { display: flex; gap: 8px; margin-top: 2px; }
 .program-start {
-  margin-top: 4px;
+  flex: 1;
   padding: 9px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--accent);
@@ -451,6 +465,7 @@ button:focus-visible, a:focus-visible {
   font-weight: 600;
   text-align: center;
 }
+
 .program-json-area {
   height: 220px;
   font-family: var(--mono);
@@ -458,6 +473,45 @@ button:focus-visible, a:focus-visible {
   line-height: 1.5;
   resize: vertical;
 }
+
+/* formulaire d'édition d'une étape (continue / répétitions) */
+.step-edit-row {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.step-edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.step-edit-head select.account-input {
+  width: auto;
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+.step-edit-arrows { display: flex; gap: 4px; flex-shrink: 0; }
+.step-edit-arrows button {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.step-edit-row .account-input {
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+.step-fields-row { display: flex; gap: 6px; }
+.step-fields-row .account-input { flex: 1; min-width: 0; }
 
 /* ---------- TRENDS (histogrammes) — tient sur un écran, sans scroll
    vertical ni horizontal, même en changeant le nombre de périodes ---------- */
@@ -597,7 +651,7 @@ button:focus-visible, a:focus-visible {
 @keyframes blink { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .track-timer .clock .blink { animation: none; } }
 
-/* barre de phase (séances fractionnées) */
+/* barre de phase (déroulé de la séance active) */
 .phase-bar {
   display: flex;
   align-items: center;
