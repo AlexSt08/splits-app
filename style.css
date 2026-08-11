@@ -208,6 +208,26 @@ button:focus-visible, a:focus-visible {
   background: #fff;
 }
 
+/* bandeau de séance active (sélectionnée depuis le Programme) */
+.active-session-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-raised);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+.active-session-badge button {
+  color: var(--ink-faint);
+  font-size: 13px;
+  padding: 2px 6px;
+}
+
 .section-head {
   display: flex;
   align-items: baseline;
@@ -368,6 +388,77 @@ button:focus-visible, a:focus-visible {
 .hyrox-status.ok { color: var(--good); }
 .hyrox-status.warn { color: var(--accent); }
 
+/* ---------- PROGRAMME ---------- */
+#screen-program { padding-bottom: 20px; gap: 14px; }
+.program-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 20px 20px;
+  overflow-y: auto;
+}
+.program-week-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.program-session {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.program-session.done { border-color: var(--good); }
+.program-session-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.program-session-name { font-size: 14px; font-weight: 600; }
+.program-check {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 10px;
+  flex-shrink: 0;
+}
+.program-session.done .program-check { color: var(--good); border-color: var(--good); }
+.program-session-note { font-size: 12.5px; color: var(--ink-dim); line-height: 1.4; }
+.program-session-pace {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--gold);
+}
+.program-start {
+  margin-top: 4px;
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.program-json-area {
+  height: 220px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 /* ---------- TRENDS (histogrammes) ---------- */
 #screen-trends { padding: 0 20px 28px; gap: 18px; }
 .trends-controls {
@@ -471,10 +562,10 @@ button:focus-visible, a:focus-visible {
   background: var(--bg);
   padding: 0 20px;
   padding-bottom: 26px;
-  gap: 18px;
+  gap: 14px;
 }
 .track-timer {
-  margin-top: 10px;
+  margin-top: 6px;
   text-align: center;
 }
 .track-timer .clock {
@@ -487,6 +578,26 @@ button:focus-visible, a:focus-visible {
 .track-timer .clock .blink { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .track-timer .clock .blink { animation: none; } }
+
+/* barre de phase (séances fractionnées) */
+.phase-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-raised);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.phase-name { font-size: 13.5px; font-weight: 600; color: var(--gold); }
+.phase-rep { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
+.phase-timer {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
 
 .lap-ring-wrap {
   position: relative;

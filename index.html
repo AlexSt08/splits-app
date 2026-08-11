@@ -67,6 +67,11 @@
       <div class="hyrox-status" id="home-hyrox-status">—</div>
     </div>
 
+    <div class="active-session-badge" id="active-session-badge" style="display:none;">
+      <span id="active-session-text">—</span>
+      <button id="btn-clear-session">✕</button>
+    </div>
+
     <button class="start-btn" id="btn-start-run">
       <span class="dot"></span> Démarrer une course
     </button>
@@ -92,6 +97,14 @@
     <div class="topbar">
       <div class="wordmark" id="track-status">EN COURSE</div>
       <div class="wordmark" id="track-gps-mini">GPS —</div>
+    </div>
+
+    <div class="phase-bar" id="phase-bar" style="display:none;">
+      <div class="phase-left">
+        <div class="phase-name" id="phase-name">—</div>
+        <div class="phase-rep" id="phase-rep"></div>
+      </div>
+      <div class="phase-timer" id="phase-timer">00:00</div>
     </div>
 
     <div class="track-timer">
@@ -193,6 +206,11 @@
     </div>
 
     <div class="section-head">
+      <h2>Programme</h2>
+      <button class="see-all" id="btn-open-program">Voir →</button>
+    </div>
+
+    <div class="section-head">
       <h2>Tendances</h2>
       <button class="see-all" id="btn-open-trends">Voir →</button>
     </div>
@@ -201,6 +219,27 @@
       <div class="section-head"><h2>Toutes les courses</h2></div>
       <div class="run-list" id="history-run-list"></div>
     </div>
+  </section>
+
+  <!-- ============ PROGRAM ============ -->
+  <section id="screen-program" class="screen">
+    <div class="back-row">
+      <button id="btn-back-from-program">← Retour</button>
+    </div>
+    <div class="section-head" style="margin-top:0; padding:0 20px;">
+      <h2 id="program-block-name">Programme</h2>
+      <button class="see-all" id="btn-edit-program">Modifier (JSON)</button>
+    </div>
+
+    <div id="program-editor" style="display:none; flex-direction:column; gap:10px; flex-shrink:0; padding:0 20px;">
+      <textarea id="program-json" class="account-input program-json-area"></textarea>
+      <div style="display:flex; gap:8px;">
+        <button class="fix-btn" id="btn-save-program-json">Enregistrer</button>
+        <button class="fix-btn" id="btn-cancel-program-json">Annuler</button>
+      </div>
+    </div>
+
+    <div id="program-list" class="program-list"></div>
   </section>
 
   <!-- ============ TRENDS ============ -->

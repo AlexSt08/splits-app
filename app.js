@@ -12,6 +12,8 @@ const HYROX_PACE_FAST_KEY = "splits.hyroxPaceFast.v1";
 const HYROX_PACE_SLOW_KEY = "splits.hyroxPaceSlow.v1";
 const TRENDS_PERIOD_KEY = "splits.trendsPeriod.v1";
 const TRENDS_COUNT_KEY = "splits.trendsCount.v1";
+const TRAINING_PLAN_KEY = "splits.trainingPlan.v1";
+const TRAINING_DONE_KEY = "splits.trainingDone.v1";
 const DEFAULT_GOAL_KM = 20;
 const DEFAULT_HYROX_PACE_FAST_SEC = 330; // 5:30 /km
 const DEFAULT_HYROX_PACE_SLOW_SEC = 360; // 6:00 /km
@@ -19,11 +21,74 @@ const DEFAULT_HYROX_PACE_SLOW_SEC = 360; // 6:00 /km
 const MIN_ACCURACY_M = 30;      // ignore les points trop imprécis
 const MIN_STEP_M = 3;           // ignore le bruit GPS sous ce seuil
 
+// zone EF par défaut (7:05–8:16/km), utilisée pour l'échauffement et le retour
+// au calme des séances fractionnées quand aucune allure spécifique n'est donnée
+const EF_ZONE = { min: 425, max: 496 };
+
 const SUPABASE_URL = "https://fyuvconzpqglvhufixzv.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_YFi6gTCa6b6i5APTxMT6vg_x06ofpEr";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
+
+// ============================================================
+// PROGRAMME D'ENTRAÎNEMENT — Bloc 1 (VMA 12,1 km/h), modifiable via l'écran Programme
+// ============================================================
+const DEFAULT_TRAINING_PLAN = {
+  name: "Bloc 1 — VMA 12,1 km/h",
+  weeks: [
+    { week: 1, label: "S1 · Mise en route", sessions: [
+      { id: "s1-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "35' EF en continu" },
+      { id: "s1-2", name: "Fractionné court", type: "interval", warmupSec: 900, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 5, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, note: "5×1' à 5:50/km, récup 1' trot" },
+    ]},
+    { week: 2, label: "S2 · Montée en volume", sessions: [
+      { id: "s2-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "40' EF en continu" },
+      { id: "s2-2", name: "Fractionné court", type: "interval", warmupSec: 900, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 8, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, note: "8×1' à 5:50/km, récup 1' trot" },
+    ]},
+    { week: 3, label: "S3 · Choc VMA", sessions: [
+      { id: "s3-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "45' EF en continu" },
+      { id: "s3-2", name: "30/30", type: "interval", warmupSec: 600, cooldownSec: 600, sets: 2, restBetweenSetsSec: 90, reps: 6, workSec: 30, workPaceMinSec: 283, workPaceMaxSec: 298, restSec: 30, note: "2×(6×30″ à 4:58-4:43/km)" },
+    ]},
+    { week: 4, label: "S4 · Semaine la plus chargée", sessions: [
+      { id: "s4-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "50' EF en continu" },
+      { id: "s4-2", name: "Fractionné moyen", type: "interval", warmupSec: 600, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 5, workSec: 120, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 90, note: "5×2' à 5:50/km, récup active" },
+      { id: "s4-3", name: "Endurance légère", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "30' EF en continu" },
+    ]},
+    { week: 5, label: "S5 · Consolidation", sessions: [
+      { id: "s5-1", name: "Endurance", type: "endurance", paceMinSec: 425, paceMaxSec: 496, note: "55' EF en continu" },
+      { id: "s5-2", name: "Fractionné long", type: "interval", warmupSec: 900, cooldownSec: 600, sets: 1, restBetweenSetsSec: 0, reps: 4, workSec: 180, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 120, note: "4×3' à 5:50/km, récup active" },
+    ]},
+  ],
+};
+
+function loadTrainingPlan() {
+  try {
+    const raw = localStorage.getItem(TRAINING_PLAN_KEY);
+    return raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_TRAINING_PLAN));
+  } catch (e) {
+    return JSON.parse(JSON.stringify(DEFAULT_TRAINING_PLAN));
+  }
+}
+function saveTrainingPlan(plan) {
+  localStorage.setItem(TRAINING_PLAN_KEY, JSON.stringify(plan));
+}
+function loadTrainingDone() {
+  try {
+    return JSON.parse(localStorage.getItem(TRAINING_DONE_KEY) || "{}");
+  } catch (e) {
+    return {};
+  }
+}
+function saveTrainingDone(done) {
+  localStorage.setItem(TRAINING_DONE_KEY, JSON.stringify(done));
+}
+function findSessionById(id) {
+  for (const w of trainingPlan.weeks) {
+    const found = w.sessions.find((s) => s.id === id);
+    if (found) return found;
+  }
+  return null;
+}
 
 // ---------- state ----------
 let runs = loadRuns();
@@ -33,8 +98,16 @@ let hyroxPaceSlow = Number(localStorage.getItem(HYROX_PACE_SLOW_KEY)) || DEFAULT
 let trendsPeriod = localStorage.getItem(TRENDS_PERIOD_KEY) || "week";
 let trendsCount = Number(localStorage.getItem(TRENDS_COUNT_KEY)) || 10;
 let trendsOrigin = "history";
+let trainingPlan = loadTrainingPlan();
+let trainingDone = loadTrainingDone();
+let activeSession = null;   // séance du programme sélectionnée pour la prochaine course
 let currentUser = null;
 let syncing = false;
+
+// ---------- moteur de phases (séances fractionnées) ----------
+let phaseSequence = [];
+let phaseIndex = -1;
+let paceAlertState = "in"; // "in" | "out" — déclenchement uniquement au changement d'état
 
 let tracking = {
   active: false,
@@ -150,6 +223,17 @@ function toast(msg) {
   el.classList.add("show");
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove("show"), 2200);
+}
+function speak(text) {
+  if (!("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "fr-FR";
+    window.speechSynthesis.speak(u);
+  } catch (e) {
+    // synthèse vocale indisponible — silencieux
+  }
 }
 
 // ---------- HYROX target helpers ----------
@@ -301,6 +385,161 @@ function renderTrends() {
   renderTrendBars("trends-bars-pace", paceValues);
 }
 
+// ---------- PROGRAMME : rendu et édition ----------
+function updateActiveSessionBadge() {
+  const badge = document.getElementById("active-session-badge");
+  if (activeSession) {
+    badge.style.display = "flex";
+    document.getElementById("active-session-text").textContent = `Séance : ${activeSession.name}`;
+  } else {
+    badge.style.display = "none";
+  }
+}
+function renderProgram() {
+  document.getElementById("program-block-name").textContent = trainingPlan.name || "Programme";
+  const list = document.getElementById("program-list");
+  list.innerHTML = "";
+  trainingPlan.weeks.forEach((w) => {
+    const weekEl = document.createElement("div");
+    weekEl.className = "program-week";
+    const doneCount = w.sessions.filter((s) => trainingDone[s.id]).length;
+    const header = document.createElement("div");
+    header.className = "program-week-label";
+    header.textContent = `${w.label} · ${doneCount}/${w.sessions.length}`;
+    weekEl.appendChild(header);
+    w.sessions.forEach((s) => {
+      const card = document.createElement("div");
+      card.className = "program-session" + (trainingDone[s.id] ? " done" : "");
+      const paceLabel = s.type === "endurance"
+        ? `${fmtPace(s.paceMinSec)}–${fmtPace(s.paceMaxSec)} /km`
+        : `${fmtPace(s.workPaceMinSec)}–${fmtPace(s.workPaceMaxSec)} /km`;
+      card.innerHTML = `
+        <div class="program-session-top">
+          <div class="program-session-name">${s.name}</div>
+          <button class="program-check" data-id="${s.id}">${trainingDone[s.id] ? "✓ Fait" : "Marquer fait"}</button>
+        </div>
+        <div class="program-session-note">${s.note || ""}</div>
+        <div class="program-session-pace">${paceLabel}</div>
+        <button class="program-start" data-id="${s.id}">Démarrer cette séance</button>
+      `;
+      weekEl.appendChild(card);
+    });
+    list.appendChild(weekEl);
+  });
+  list.querySelectorAll(".program-check").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      if (trainingDone[id]) delete trainingDone[id];
+      else trainingDone[id] = new Date().toISOString();
+      saveTrainingDone(trainingDone);
+      renderProgram();
+    });
+  });
+  list.querySelectorAll(".program-start").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const session = findSessionById(btn.dataset.id);
+      if (!session) return;
+      activeSession = session;
+      updateActiveSessionBadge();
+      showScreen("screen-home");
+      toast(`Séance "${session.name}" sélectionnée — appuie sur Démarrer`);
+    });
+  });
+}
+
+// ============================================================
+// PHASE ENGINE (séances fractionnées) & alerte d'allure
+// ============================================================
+function buildPhaseSequence(session) {
+  const phases = [];
+  if (session.warmupSec) phases.push({ kind: "warmup", label: "Échauffement", durationSec: session.warmupSec });
+  const sets = session.sets || 1;
+  for (let set = 1; set <= sets; set++) {
+    for (let rep = 1; rep <= session.reps; rep++) {
+      phases.push({
+        kind: "work", label: "Allure rapide", durationSec: session.workSec,
+        paceMinSec: session.workPaceMinSec, paceMaxSec: session.workPaceMaxSec,
+        rep, totalReps: session.reps, set, totalSets: sets,
+      });
+      const isLastRepOfSet = rep === session.reps;
+      const isLastSet = set === sets;
+      if (!(isLastRepOfSet && isLastSet)) {
+        if (isLastRepOfSet && !isLastSet) {
+          phases.push({ kind: "restSet", label: "Récup entre séries", durationSec: session.restBetweenSetsSec || 0 });
+        } else {
+          phases.push({ kind: "rest", label: "Récupération", durationSec: session.restSec });
+        }
+      }
+    }
+  }
+  if (session.cooldownSec) phases.push({ kind: "cooldown", label: "Retour au calme", durationSec: session.cooldownSec });
+  return phases.filter((p) => p.durationSec > 0);
+}
+
+function advancePhase() {
+  phaseIndex++;
+  if (phaseIndex >= phaseSequence.length) {
+    speak("Séance terminée, bravo");
+    document.getElementById("phase-bar").style.display = "none";
+    phaseSequence = [];
+    phaseIndex = -1;
+    return;
+  }
+  const phase = phaseSequence[phaseIndex];
+  phase.remainingSec = phase.durationSec;
+  const repInfo = phase.kind === "work" ? `, répétition ${phase.rep} sur ${phase.totalReps}` : "";
+  speak(`${phase.label}${repInfo}`);
+  paceAlertState = "in"; // on redonne une chance à chaque nouvelle phase avant de réalerter
+  updatePhaseUI();
+}
+
+function updatePhaseUI() {
+  if (phaseIndex < 0 || phaseIndex >= phaseSequence.length) return;
+  const phase = phaseSequence[phaseIndex];
+  document.getElementById("phase-name").textContent = phase.label;
+  document.getElementById("phase-timer").textContent = fmtClock(phase.remainingSec);
+  document.getElementById("phase-rep").textContent = phase.totalReps
+    ? `Rép. ${phase.rep}/${phase.totalReps}${phase.totalSets > 1 ? ` · série ${phase.set}/${phase.totalSets}` : ""}`
+    : "";
+}
+
+function tickPhase() {
+  if (phaseIndex < 0 || phaseIndex >= phaseSequence.length) return;
+  const phase = phaseSequence[phaseIndex];
+  phase.remainingSec -= 1;
+  if (phase.remainingSec <= 0) {
+    advancePhase();
+  } else {
+    updatePhaseUI();
+  }
+}
+
+function getCurrentTargetZone() {
+  if (!activeSession) return null;
+  if (activeSession.type === "endurance") {
+    return { min: activeSession.paceMinSec, max: activeSession.paceMaxSec };
+  }
+  if (activeSession.type === "interval" && phaseIndex >= 0 && phaseIndex < phaseSequence.length) {
+    const phase = phaseSequence[phaseIndex];
+    if (phase.kind === "work") return { min: phase.paceMinSec, max: phase.paceMaxSec };
+    if (phase.kind === "warmup" || phase.kind === "cooldown") return EF_ZONE;
+  }
+  return null;
+}
+
+function checkPaceAlert(currentPaceSecPerKm) {
+  const zone = getCurrentTargetZone();
+  if (!zone || !isFinite(currentPaceSecPerKm) || currentPaceSecPerKm <= 0) return;
+  const inZone = currentPaceSecPerKm >= zone.min && currentPaceSecPerKm <= zone.max;
+  if (!inZone && paceAlertState !== "out") {
+    paceAlertState = "out";
+    if (currentPaceSecPerKm < zone.min) speak("Trop rapide, ralentis");
+    else speak("Trop lent, accélère");
+  } else if (inZone) {
+    paceAlertState = "in";
+  }
+}
+
 // ---------- navigation ----------
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
@@ -365,6 +604,39 @@ document.getElementById("trends-step-plus").addEventListener("click", () => {
   localStorage.setItem(TRENDS_COUNT_KEY, String(trendsCount));
   renderTrends();
 });
+document.getElementById("btn-open-program").addEventListener("click", () => {
+  showScreen("screen-program");
+  document.getElementById("program-editor").style.display = "none";
+  renderProgram();
+});
+document.getElementById("btn-back-from-program").addEventListener("click", () => {
+  showScreen("screen-history");
+  renderHistory();
+});
+document.getElementById("btn-edit-program").addEventListener("click", () => {
+  document.getElementById("program-json").value = JSON.stringify(trainingPlan, null, 2);
+  document.getElementById("program-editor").style.display = "flex";
+});
+document.getElementById("btn-cancel-program-json").addEventListener("click", () => {
+  document.getElementById("program-editor").style.display = "none";
+});
+document.getElementById("btn-save-program-json").addEventListener("click", () => {
+  try {
+    const parsed = JSON.parse(document.getElementById("program-json").value);
+    if (!parsed.weeks || !Array.isArray(parsed.weeks)) throw new Error("format invalide");
+    trainingPlan = parsed;
+    saveTrainingPlan(trainingPlan);
+    document.getElementById("program-editor").style.display = "none";
+    renderProgram();
+    toast("Programme mis à jour");
+  } catch (e) {
+    toast("JSON invalide — vérifie la syntaxe");
+  }
+});
+document.getElementById("btn-clear-session").addEventListener("click", () => {
+  activeSession = null;
+  updateActiveSessionBadge();
+});
 document.getElementById("btn-account").addEventListener("click", () => {
   if (tracking.active) return;
   document.getElementById("hyrox-pace-fast").value = formatMMSS(hyroxPaceFast);
@@ -410,6 +682,7 @@ function renderHome() {
 
   updateHyroxTargetDisplays();
   updateHyroxStatus("home-hyrox-status", avgPace, runs.length > 0);
+  updateActiveSessionBadge();
 
   const list = document.getElementById("home-run-list");
   renderRunList(list, runs.slice(0, 5));
@@ -728,6 +1001,19 @@ function startRun() {
   updateTrackUI();
   setGpsStatus("searching", "Recherche du signal…");
 
+  paceAlertState = "in";
+  if (activeSession && activeSession.type === "interval") {
+    phaseSequence = buildPhaseSequence(activeSession);
+    phaseIndex = -1;
+    document.getElementById("phase-bar").style.display = "flex";
+    advancePhase();
+  } else {
+    phaseSequence = [];
+    phaseIndex = -1;
+    document.getElementById("phase-bar").style.display = "none";
+    if (activeSession) speak(`Séance ${activeSession.name} démarrée`);
+  }
+
   tracking.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
     enableHighAccuracy: true,
     maximumAge: 1000,
@@ -818,6 +1104,11 @@ function updateTrackUI() {
   const circumference = 326.7;
   const offset = circumference * (1 - progressInKm);
   document.getElementById("lap-ring-fg").style.strokeDashoffset = offset;
+
+  if (!tracking.paused) {
+    tickPhase();
+    checkPaceAlert(paceNow);
+  }
 }
 
 function togglePause() {
@@ -847,6 +1138,9 @@ function stopRun() {
   releaseWakeLock();
   setScreenLock(false);
   document.getElementById("btn-lock-fab").style.display = "none";
+  document.getElementById("phase-bar").style.display = "none";
+  phaseSequence = [];
+  phaseIndex = -1;
 
   const durationSec = Math.round(currentElapsedSec());
   const distanceM = tracking.distanceM;
@@ -871,6 +1165,9 @@ function stopRun() {
 
   tracking.active = false;
   if (tracking.map) { tracking.map.remove(); tracking.map = null; }
+
+  activeSession = null;
+  updateActiveSessionBadge();
 
   showScreen("screen-home");
   renderHome();
