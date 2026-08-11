@@ -340,7 +340,7 @@ button:focus-visible, a:focus-visible {
   font-weight: 600;
 }
 
-/* ---------- HYROX objectif ---------- */
+/* ---------- HYROX objectif (écran Historique uniquement) ---------- */
 .hyrox-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -459,13 +459,19 @@ button:focus-visible, a:focus-visible {
   resize: vertical;
 }
 
-/* ---------- TRENDS (histogrammes) ---------- */
-#screen-trends { padding: 0 20px 28px; gap: 18px; }
+/* ---------- TRENDS (histogrammes) — tient sur un écran, sans scroll
+   vertical ni horizontal, même en changeant le nombre de périodes ---------- */
+#screen-trends {
+  padding: 0 20px 14px;
+  gap: 10px;
+  overflow-y: hidden;
+}
 .trends-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-shrink: 0;
 }
 .trends-toggle {
   display: flex;
@@ -503,38 +509,47 @@ button:focus-visible, a:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 14px;
+  padding: 10px 12px 8px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .trends-chart-label {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-faint);
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
 }
 .trends-bars {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
-  height: 130px;
-  overflow-x: auto;
+  gap: 3px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden; /* jamais de scroll, même horizontal : les barres se compriment */
 }
 .trend-bar {
   display: flex;
   flex-direction: column;
   align-items: center;
   flex: 1;
-  min-width: 24px;
+  min-width: 0;
   height: 100%;
   justify-content: flex-end;
 }
 .trend-bar-val {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8px;
   color: var(--ink-dim);
   white-space: nowrap;
-  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin-bottom: 2px;
 }
 .trend-bar-track {
   width: 100%;
@@ -546,15 +561,18 @@ button:focus-visible, a:focus-visible {
 .trend-bar-fill {
   width: 100%;
   background: var(--accent);
-  border-radius: 3px 3px 0 0;
+  border-radius: 2px 2px 0 0;
   min-height: 2px;
 }
 .trend-bar-label {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 7.5px;
   color: var(--ink-faint);
-  margin-top: 5px;
+  margin-top: 3px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* ---------- TRACKING ---------- */

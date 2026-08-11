@@ -202,6 +202,13 @@ function fmtDurationShort(totalSec) {
   if (h > 0) return `${h}h${String(m).padStart(2, "0")}`;
   return `${m} min`;
 }
+// mm:ss "brut" (les minutes peuvent dépasser 59) — utilisé pour le graphique
+// Tendances / Durée, dont le titre porte déjà l'unité (min)
+function fmtMinSecTotal(totalSec) {
+  const totalMinutes = Math.floor(totalSec / 60);
+  const secs = Math.round(totalSec % 60);
+  return `${totalMinutes}:${String(secs).padStart(2, "0")}`;
+}
 function fmtPace(secPerKm) {
   if (!isFinite(secPerKm) || secPerKm <= 0) return "—'—\"";
   const m = Math.floor(secPerKm / 60);
@@ -366,7 +373,7 @@ function renderTrends() {
     return {
       label: periodLabelFor(k, trendsPeriod),
       value: agg ? agg.durationSec / 3600 : 0,
-      display: agg ? fmtDurationShort(agg.durationSec) : "0",
+      display: agg ? fmtMinSecTotal(agg.durationSec) : "0:00",
     };
   });
   renderTrendBars("trends-bars-duration", durationValues);
@@ -547,13 +554,24 @@ function showScreen(id) {
   document.querySelectorAll(".tabbar button").forEach((b) => b.classList.remove("active"));
   if (id === "screen-home") document.querySelector(".tab-home").classList.add("active");
   if (id === "screen-history") document.querySelector(".tab-history").classList.add("active");
+  if (id === "screen-program") document.querySelector(".tab-program").classList.add("active");
 }
 
 document.querySelectorAll(".tabbar button").forEach((btn) => {
   btn.addEventListener("click", () => {
     if (tracking.active) return; // pas de navigation pendant une course
-    showScreen(btn.dataset.tab === "home" ? "screen-home" : "screen-history");
-    if (btn.dataset.tab === "history") renderHistory();
+    const tab = btn.dataset.tab;
+    if (tab === "home") {
+      showScreen("screen-home");
+      renderHome();
+    } else if (tab === "history") {
+      showScreen("screen-history");
+      renderHistory();
+    } else if (tab === "program") {
+      showScreen("screen-program");
+      document.getElementById("program-editor").style.display = "none";
+      renderProgram();
+    }
   });
 });
 document.getElementById("btn-see-all").addEventListener("click", () => {
@@ -604,14 +622,9 @@ document.getElementById("trends-step-plus").addEventListener("click", () => {
   localStorage.setItem(TRENDS_COUNT_KEY, String(trendsCount));
   renderTrends();
 });
-document.getElementById("btn-open-program").addEventListener("click", () => {
-  showScreen("screen-program");
-  document.getElementById("program-editor").style.display = "none";
-  renderProgram();
-});
 document.getElementById("btn-back-from-program").addEventListener("click", () => {
-  showScreen("screen-history");
-  renderHistory();
+  showScreen("screen-home");
+  renderHome();
 });
 document.getElementById("btn-edit-program").addEventListener("click", () => {
   document.getElementById("program-json").value = JSON.stringify(trainingPlan, null, 2);
@@ -681,7 +694,6 @@ function renderHome() {
   document.getElementById("home-avg-pace").textContent = totalM > 0 ? fmtPace(avgPace) : "—";
 
   updateHyroxTargetDisplays();
-  updateHyroxStatus("home-hyrox-status", avgPace, runs.length > 0);
   updateActiveSessionBadge();
 
   const list = document.getElementById("home-run-list");
@@ -1258,6 +1270,18 @@ unlockBtn.addEventListener("pointercancel", resetHold);
 
 // rafraîchit l'affichage de l'écran verrouillé en même temps que le reste
 setInterval(() => { if (tracking.active && tracking.screenLocked) updateLockReadout(); }, 1000);
+
+// ============================================================
+// BOUTON RETOUR (matériel/virtuel Android) — piégé dans l'app :
+// ne fait rien pendant une course active, renvoie à l'accueil sinon.
+// ============================================================
+history.pushState({ splitsApp: true }, "");
+window.addEventListener("popstate", () => {
+  history.pushState({ splitsApp: true }, "");
+  if (tracking.active) return;
+  showScreen("screen-home");
+  renderHome();
+});
 
 // ============================================================
 // SUPABASE — auth (magic link) & synchronisation

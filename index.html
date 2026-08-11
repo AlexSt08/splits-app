@@ -52,21 +52,6 @@
       </div>
     </div>
 
-    <div class="hyrox-card">
-      <div class="hyrox-card-label">Objectif</div>
-      <div class="hyrox-card-row">
-        <div class="hyrox-card-cell">
-          <div class="hyrox-sub">Allure cible</div>
-          <div class="hyrox-val" id="home-hyrox-target">5:30–6:00 /km</div>
-        </div>
-        <div class="hyrox-card-cell">
-          <div class="hyrox-sub">Distance course</div>
-          <div class="hyrox-val">10 km</div>
-        </div>
-      </div>
-      <div class="hyrox-status" id="home-hyrox-status">—</div>
-    </div>
-
     <div class="active-session-badge" id="active-session-badge" style="display:none;">
       <span id="active-session-text">—</span>
       <button id="btn-clear-session">✕</button>
@@ -206,11 +191,6 @@
     </div>
 
     <div class="section-head">
-      <h2>Programme</h2>
-      <button class="see-all" id="btn-open-program">Voir →</button>
-    </div>
-
-    <div class="section-head">
       <h2>Tendances</h2>
       <button class="see-all" id="btn-open-trends">Voir →</button>
     </div>
@@ -224,7 +204,7 @@
   <!-- ============ PROGRAM ============ -->
   <section id="screen-program" class="screen">
     <div class="back-row">
-      <button id="btn-back-from-program">← Retour</button>
+      <button id="btn-back-from-program">← Accueil</button>
     </div>
     <div class="section-head" style="margin-top:0; padding:0 20px;">
       <h2 id="program-block-name">Programme</h2>
@@ -268,7 +248,7 @@
       <div class="trends-bars" id="trends-bars-distance"></div>
     </div>
     <div class="trends-chart">
-      <div class="trends-chart-label">Durée</div>
+      <div class="trends-chart-label">Durée (min)</div>
       <div class="trends-bars" id="trends-bars-duration"></div>
     </div>
     <div class="trends-chart">
@@ -384,6 +364,7 @@
   <div class="tabbar">
     <button class="tab-home active" data-tab="home">Accueil</button>
     <button class="tab-history" data-tab="history">Historique</button>
+    <button class="tab-program" data-tab="program">Programme</button>
   </div>
 
   <div class="toast" id="toast"></div>
