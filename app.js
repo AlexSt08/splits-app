@@ -8,15 +8,11 @@
 const STORAGE_KEY = "splits.runs.v1";
 const GOAL_KEY = "splits.weeklyGoalKm.v1";
 const LAST_SYNC_KEY = "splits.lastSync.v1";
-const HYROX_PACE_FAST_KEY = "splits.hyroxPaceFast.v1";
-const HYROX_PACE_SLOW_KEY = "splits.hyroxPaceSlow.v1";
 const TRENDS_PERIOD_KEY = "splits.trendsPeriod.v1";
 const TRENDS_COUNT_KEY = "splits.trendsCount.v1";
 const TRAINING_PLAN_KEY = "splits.trainingPlan.v1";
 const TRAINING_DONE_KEY = "splits.trainingDone.v1";
 const DEFAULT_GOAL_KM = 20;
-const DEFAULT_HYROX_PACE_FAST_SEC = 330; // 5:30 /km
-const DEFAULT_HYROX_PACE_SLOW_SEC = 360; // 6:00 /km
 
 const MIN_ACCURACY_M = 30;      // ignore les points trop imprécis
 const MIN_STEP_M = 3;           // ignore le bruit GPS sous ce seuil
@@ -145,8 +141,6 @@ function findSessionById(id) {
 // ---------- state ----------
 let runs = loadRuns();
 let weeklyGoal = Number(localStorage.getItem(GOAL_KEY)) || DEFAULT_GOAL_KM;
-let hyroxPaceFast = Number(localStorage.getItem(HYROX_PACE_FAST_KEY)) || DEFAULT_HYROX_PACE_FAST_SEC;
-let hyroxPaceSlow = Number(localStorage.getItem(HYROX_PACE_SLOW_KEY)) || DEFAULT_HYROX_PACE_SLOW_SEC;
 let trendsPeriod = localStorage.getItem(TRENDS_PERIOD_KEY) || "week";
 let trendsCount = Number(localStorage.getItem(TRENDS_COUNT_KEY)) || 10;
 let trendsOrigin = "history";
@@ -300,7 +294,7 @@ function speak(text) {
   }
 }
 
-// ---------- HYROX target helpers ----------
+// ---------- format mm:ss (durées/allures dans le programme) ----------
 function parseMMSS(str) {
   const m = String(str || "").trim().match(/^(\d{1,3}):([0-5]?\d)$/);
   if (!m) return null;
@@ -310,30 +304,6 @@ function formatMMSS(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
-}
-function updateHyroxTargetDisplays() {
-  const label = `${formatMMSS(hyroxPaceFast)}–${formatMMSS(hyroxPaceSlow)} /km`;
-  const homeEl = document.getElementById("home-hyrox-target");
-  const historyEl = document.getElementById("history-hyrox-target");
-  if (homeEl) homeEl.textContent = label;
-  if (historyEl) historyEl.textContent = label;
-}
-function updateHyroxStatus(elId, avgPaceSecPerKm, hasRuns) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  if (!hasRuns) {
-    el.textContent = "Pas encore de courses enregistrées.";
-    el.className = "hyrox-status";
-    return;
-  }
-  if (avgPaceSecPerKm <= hyroxPaceSlow) {
-    el.textContent = `Ton allure moyenne (${fmtPace(avgPaceSecPerKm)}/km) est dans l'objectif.`;
-    el.className = "hyrox-status ok";
-  } else {
-    const diff = Math.round(avgPaceSecPerKm - hyroxPaceSlow);
-    el.textContent = `Ton allure moyenne (${fmtPace(avgPaceSecPerKm)}/km) est à ${diff}s/km de l'objectif.`;
-    el.className = "hyrox-status warn";
-  }
 }
 
 // ---------- TENDANCES : agrégation par semaine / mois ----------
@@ -1077,33 +1047,12 @@ document.getElementById("btn-clear-session").addEventListener("click", () => {
 });
 document.getElementById("btn-account").addEventListener("click", () => {
   if (tracking.active) return;
-  document.getElementById("hyrox-pace-fast").value = formatMMSS(hyroxPaceFast);
-  document.getElementById("hyrox-pace-slow").value = formatMMSS(hyroxPaceSlow);
   showScreen("screen-account");
   updateAccountUI();
 });
 document.getElementById("btn-back-from-account").addEventListener("click", () => {
   showScreen("screen-home");
   renderHome();
-});
-document.getElementById("btn-save-hyrox-goal").addEventListener("click", () => {
-  const fastVal = parseMMSS(document.getElementById("hyrox-pace-fast").value);
-  const slowVal = parseMMSS(document.getElementById("hyrox-pace-slow").value);
-  if (fastVal == null || slowVal == null) {
-    toast("Format attendu : mm:ss (ex. 5:30)");
-    return;
-  }
-  if (fastVal > slowVal) {
-    toast("L'allure rapide doit être plus rapide que l'allure lente.");
-    return;
-  }
-  hyroxPaceFast = fastVal;
-  hyroxPaceSlow = slowVal;
-  localStorage.setItem(HYROX_PACE_FAST_KEY, String(fastVal));
-  localStorage.setItem(HYROX_PACE_SLOW_KEY, String(slowVal));
-  updateHyroxTargetDisplays();
-  renderHome();
-  toast("Objectif enregistré");
 });
 
 // ============================================================
@@ -1118,7 +1067,6 @@ function renderHome() {
   const avgPace = totalM > 0 ? totalSec / (totalM / 1000) : 0;
   document.getElementById("home-avg-pace").textContent = totalM > 0 ? fmtPace(avgPace) : "—";
 
-  updateHyroxTargetDisplays();
   updateActiveSessionBadge();
 
   const list = document.getElementById("home-run-list");
@@ -1171,13 +1119,6 @@ function renderHistory() {
   document.getElementById("goal-target").textContent = weeklyGoal;
   document.getElementById("stat-week-goal").innerHTML = `${fmtKm(weekM, 1)} / <span id="goal-target">${weeklyGoal}</span> km`;
   document.getElementById("stat-week-runs").textContent = `${weekRuns.length} sortie${weekRuns.length > 1 ? "s" : ""}`;
-
-  // objectif HYROX : allure moyenne sur l'ensemble des courses
-  const totalM = runs.reduce((s, r) => s + r.distanceM, 0);
-  const totalSec = runs.reduce((s, r) => s + r.durationSec, 0);
-  const avgPaceAll = totalM > 0 ? totalSec / (totalM / 1000) : 0;
-  updateHyroxTargetDisplays();
-  updateHyroxStatus("history-hyrox-status", avgPaceAll, runs.length > 0);
 }
 
 function bestKmSplit() {

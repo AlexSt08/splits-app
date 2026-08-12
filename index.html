@@ -66,9 +66,9 @@
       <span class="trends-link-arrow">Voir →</span>
     </button>
 
-    <div class="home-recent">
+    <div class="recent-list-block">
       <div class="section-head">
-        <h2>Dernières courses</h2>
+        <h2>5 dernières courses</h2>
         <button class="see-all" id="btn-see-all">Tout voir</button>
       </div>
       <div class="run-list-wrap" id="home-run-list-wrap">
@@ -167,7 +167,7 @@
       </div>
       <div class="cell gold">
         <div class="label">Objectif hebdo</div>
-        <div class="value" id="stat-week-goal">0,0 / <span id="goal-target">20</span> km</div>
+        <div class="value nowrap-value" id="stat-week-goal">0,0 / <span id="goal-target">20</span> km</div>
       </div>
       <div class="cell">
         <div class="label">Cette semaine</div>
@@ -175,29 +175,16 @@
       </div>
     </div>
 
-    <div class="hyrox-card">
-      <div class="hyrox-card-label">Objectif</div>
-      <div class="hyrox-card-row">
-        <div class="hyrox-card-cell">
-          <div class="hyrox-sub">Allure cible</div>
-          <div class="hyrox-val" id="history-hyrox-target">5:30–6:00 /km</div>
-        </div>
-        <div class="hyrox-card-cell">
-          <div class="hyrox-sub">Distance course</div>
-          <div class="hyrox-val">10 km</div>
-        </div>
-      </div>
-      <div class="hyrox-status" id="history-hyrox-status">—</div>
-    </div>
-
     <div class="section-head">
       <h2>Tendances</h2>
       <button class="see-all" id="btn-open-trends">Voir →</button>
     </div>
 
-    <div>
+    <div class="recent-list-block">
       <div class="section-head"><h2>Toutes les courses</h2></div>
-      <div class="run-list" id="history-run-list"></div>
+      <div class="run-list-wrap" id="history-run-list-wrap">
+        <div class="run-list" id="history-run-list"></div>
+      </div>
     </div>
   </section>
 
@@ -323,17 +310,6 @@
     <div class="topbar" style="padding-top:0;">
       <div class="wordmark"><b>Compte & réglages</b></div>
     </div>
-
-    <div>
-      <div class="section-head" style="margin-top:0;"><h2>Objectif</h2></div>
-      <label class="account-label" for="hyrox-pace-fast">Allure rapide (mm:ss / km)</label>
-      <input type="text" id="hyrox-pace-fast" class="account-input" placeholder="5:30" style="margin-bottom:14px;" />
-      <label class="account-label" for="hyrox-pace-slow">Allure lente (mm:ss / km)</label>
-      <input type="text" id="hyrox-pace-slow" class="account-input" placeholder="6:00" />
-      <button id="btn-save-hyrox-goal" class="ctrl-btn pause" style="width:100%;margin-top:10px;">Enregistrer l'objectif</button>
-    </div>
-
-    <div class="section-head"><h2>Compte</h2></div>
 
     <div id="account-logged-out">
       <p class="account-hint">Connecte-toi pour synchroniser tes courses entre appareils. Sans connexion, l'app reste utilisable normalement en local.</p>

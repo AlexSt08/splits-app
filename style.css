@@ -299,10 +299,10 @@ button:focus-visible, a:focus-visible {
   border-radius: var(--radius-sm);
 }
 
-/* zone scrollable "Dernières courses" : remplit l'espace vertical restant,
-   entre 1 et 5 lignes visibles selon la place disponible sur l'écran ;
-   pas de bordure visible, juste un cadre de défilement invisible */
-.home-recent {
+/* zone scrollable pour une liste de courses (Accueil et Historique) :
+   remplit l'espace vertical restant de son conteneur et défile en interne
+   uniquement si le contenu dépasse — jamais la page entière */
+.recent-list-block {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -311,7 +311,6 @@ button:focus-visible, a:focus-visible {
 .run-list-wrap {
   flex: 1;
   min-height: 58px;
-  max-height: 290px;
   overflow-y: auto;
   margin-top: 2px;
 }
@@ -339,54 +338,6 @@ button:focus-visible, a:focus-visible {
   color: var(--accent);
   font-weight: 600;
 }
-
-/* ---------- HYROX objectif (écran Historique uniquement) ---------- */
-.hyrox-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.hyrox-card-label {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--gold);
-}
-.hyrox-card-row {
-  display: flex;
-  gap: 16px;
-}
-.hyrox-card-cell { flex: 1; }
-.hyrox-sub {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-.hyrox-val {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 14px;
-  margin-top: 2px;
-  color: var(--ink);
-}
-.hyrox-status {
-  font-size: 11px;
-  color: var(--ink-faint);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.hyrox-status.ok { color: var(--good); }
-.hyrox-status.warn { color: var(--accent); }
 
 /* ---------- PROGRAMME ---------- */
 #screen-program { padding-bottom: 20px; gap: 14px; }
@@ -921,13 +872,19 @@ button:focus-visible, a:focus-visible {
 }
 .unlock-icon { position: relative; z-index: 2; display:flex; }
 
-/* ---------- HISTORY ---------- */
-#screen-history { padding: 0 20px 28px; gap: 16px; }
+/* ---------- HISTORY (tient sans scroll de page : la liste des courses
+   est la seule zone qui défile en interne) ---------- */
+#screen-history {
+  padding: 0 20px 12px;
+  gap: 14px;
+  overflow-y: hidden;
+}
 
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  flex-shrink: 0;
 }
 .stats-grid .cell {
   background: var(--surface);
@@ -949,6 +906,11 @@ button:focus-visible, a:focus-visible {
   margin-top: 4px;
 }
 .stats-grid .cell.gold .value { color: var(--gold); }
+/* "Objectif hebdo" (ex. "11,3 / 20 km") tient toujours sur une seule ligne */
+.stats-grid .cell .value.nowrap-value {
+  white-space: nowrap;
+  font-size: 17px;
+}
 
 .back-row {
   display: flex;
