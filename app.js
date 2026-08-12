@@ -181,6 +181,8 @@ let tracking = {
   screenLocked: false,
   recentSamples: [],  // {t, distanceM} — pour l'allure lissée sur 10s
   uiTicks: 0,
+  paceHistory: [],     // {t: secondes écoulées, pace: sec/km} — courbe d'allure
+  phaseLog: [],         // {kind, label, t, distanceM, rep, ...} — un par début de phase
 };
 
 // ---------- persistence ----------
@@ -788,6 +790,18 @@ function advancePhase() {
   const repInfo = phase.kind === "work" ? `, répétition ${phase.rep} sur ${phase.totalReps}` : "";
   speak(`${phase.label}${repInfo}`);
   updatePhaseUI();
+  if (activeSession) {
+    tracking.phaseLog.push({
+      kind: phase.kind,
+      label: phase.label,
+      t: Math.round(currentElapsedSec()),
+      distanceM: tracking.distanceM,
+      rep: phase.rep || null,
+      totalReps: phase.totalReps || null,
+      set: phase.set || null,
+      totalSets: phase.totalSets || null,
+    });
+  }
 }
 
 function updatePhaseUI() {
@@ -868,6 +882,91 @@ function checkPaceAlert(currentPaceSecPerKm) {
   if (!inZone) {
     if (currentPaceSecPerKm < zone.min) speak("Trop rapide, ralentis");
     else speak("Trop lent, accélère");
+  }
+}
+
+// ============================================================
+// HISTORIQUE D'ALLURE PAR COURSE — deux templates
+//  - courbe continue (courses libres / séances sans répétitions)
+//  - barres par répétition réelle (séances contenant des répétitions)
+// ============================================================
+function computePhaseAvgPace(phaseLog, finalElapsedSec, finalDistanceM) {
+  const entries = [];
+  for (let i = 0; i < phaseLog.length; i++) {
+    const cur = phaseLog[i];
+    const next = phaseLog[i + 1];
+    const endT = next ? next.t : finalElapsedSec;
+    const endDist = next ? next.distanceM : finalDistanceM;
+    const durSec = Math.max(1, endT - cur.t);
+    const distM = Math.max(0, endDist - cur.distanceM);
+    const avgPaceSecPerKm = distM > 5 ? durSec / (distM / 1000) : null;
+    entries.push({ ...cur, durationSec: durSec, avgPaceSecPerKm });
+  }
+  return entries;
+}
+
+function renderPaceLineChart(containerId, paceHistory) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!paceHistory || paceHistory.length < 2) { container.style.display = "none"; container.innerHTML = ""; return; }
+  container.style.display = "block";
+  const paces = paceHistory.map((p) => p.pace);
+  const minPace = Math.min(...paces);
+  const maxPace = Math.max(...paces);
+  const range = Math.max(maxPace - minPace, 1);
+  const maxT = Math.max(paceHistory[paceHistory.length - 1].t, 1);
+  const W = 300, H = 90, pad = 4;
+  const points = paceHistory.map((p) => {
+    const x = pad + (p.t / maxT) * (W - 2 * pad);
+    const yNorm = (maxPace - p.pace) / range; // plus rapide (allure basse) => plus haut
+    const y = pad + (1 - yNorm) * (H - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  container.innerHTML = `
+    <div class="pace-chart-label">Allure dans le temps</div>
+    <div class="pace-chart-range-top"><span>${fmtPace(minPace)}/km</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="pace-chart-svg" preserveAspectRatio="none">
+      <polyline points="${points}" fill="none" stroke="#d6432e" stroke-width="2" vector-effect="non-scaling-stroke" />
+    </svg>
+    <div class="pace-chart-range-bottom"><span>${fmtPace(maxPace)}/km</span></div>
+  `;
+}
+
+function renderRepsBarChart(containerId, entries) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const workEntries = entries.filter((e) => e.kind === "work" && e.avgPaceSecPerKm);
+  if (workEntries.length === 0) { container.style.display = "none"; container.innerHTML = ""; return; }
+  container.style.display = "block";
+  const paces = workEntries.map((e) => e.avgPaceSecPerKm);
+  const maxPace = Math.max(...paces);
+  const minPace = Math.min(...paces);
+  const range = Math.max(maxPace - minPace, 1);
+  container.innerHTML = `<div class="pace-chart-label">Allure par répétition</div><div class="trends-bars reps-bars"></div>`;
+  const barsEl = container.querySelector(".reps-bars");
+  workEntries.forEach((e) => {
+    const pct = Math.max(4, 35 + (65 * (maxPace - e.avgPaceSecPerKm)) / range);
+    const bar = document.createElement("div");
+    bar.className = "trend-bar";
+    bar.innerHTML = `
+      <div class="trend-bar-val">${fmtPace(e.avgPaceSecPerKm)}</div>
+      <div class="trend-bar-track"><div class="trend-bar-fill" style="height:${pct}%"></div></div>
+      <div class="trend-bar-label">${e.rep || ""}${e.totalSets > 1 ? ` S${e.set}` : ""}</div>
+    `;
+    barsEl.appendChild(bar);
+  });
+}
+
+function renderRunPaceHistory(r) {
+  const containerId = "detail-pace-history";
+  if (r.hasRepetitions && r.phaseLog && r.phaseLog.length > 0) {
+    const entries = computePhaseAvgPace(r.phaseLog, r.durationSec, r.distanceM);
+    renderRepsBarChart(containerId, entries);
+  } else if (r.paceHistory && r.paceHistory.length > 1) {
+    renderPaceLineChart(containerId, r.paceHistory);
+  } else {
+    const el = document.getElementById(containerId);
+    if (el) { el.style.display = "none"; el.innerHTML = ""; }
   }
 }
 
@@ -1127,6 +1226,8 @@ function openDetail(id) {
   document.getElementById("detail-duration").textContent = fmtClock(r.durationSec);
   document.getElementById("detail-pace").textContent = `${fmtPace(r.avgPaceSecPerKm)} /km`;
 
+  renderRunPaceHistory(r);
+
   const splitsEl = document.getElementById("detail-splits");
   splitsEl.innerHTML = "";
   const maxPace = Math.max(...(r.splits || []).map((s) => s.seconds), 1);
@@ -1332,6 +1433,8 @@ function startRun() {
     screenLocked: false,
     recentSamples: [],
     uiTicks: 0,
+    paceHistory: [],
+    phaseLog: [],
   };
   showScreen("screen-track");
   document.getElementById("lock-overlay").classList.remove("show");
@@ -1434,7 +1537,7 @@ function updateTrackUI() {
 
   // allure "actuelle" affichée à l'écran : sur le dernier segment depuis le
   // dernier split (ou depuis le départ) — distincte de l'allure lissée 10s
-  // utilisée pour l'alerte vocale (rollingPaceSecPerKm)
+  // utilisée pour l'alerte vocale et l'historique (rollingPaceSecPerKm)
   const sinceSplitM = tracking.distanceM - tracking.lastSplitDistanceM;
   const sinceSplitSec = (Date.now() - tracking.lastSplitTime) / 1000;
   const paceNow = sinceSplitM > 20 ? sinceSplitSec / (sinceSplitM / 1000) : avgPace;
@@ -1451,7 +1554,10 @@ function updateTrackUI() {
     tracking.uiTicks = (tracking.uiTicks || 0) + 1;
     if (tracking.uiTicks % 2 === 0) {
       const smoothPace = rollingPaceSecPerKm();
-      if (smoothPace != null) checkPaceAlert(smoothPace);
+      if (smoothPace != null) {
+        checkPaceAlert(smoothPace);
+        tracking.paceHistory.push({ t: Math.round(elapsed), pace: Math.round(smoothPace) });
+      }
     }
   }
 }
@@ -1490,6 +1596,7 @@ function stopRun() {
   const durationSec = Math.round(currentElapsedSec());
   const distanceM = tracking.distanceM;
   const avgPaceSecPerKm = distanceM > 0 ? durationSec / (distanceM / 1000) : 0;
+  const hasRepetitions = !!(activeSession && activeSession.steps && activeSession.steps.some((s) => s.type === "repetitions"));
 
   const run = {
     id: "r_" + Date.now(),
@@ -1501,6 +1608,9 @@ function stopRun() {
     splits: tracking.splits.map((s) => ({ km: s.km, seconds: s.seconds })),
     updatedAt: new Date().toISOString(),
     shareToken: null,
+    paceHistory: tracking.paceHistory.slice(),
+    phaseLog: hasRepetitions ? tracking.phaseLog.slice() : [],
+    hasRepetitions,
   };
 
   runs.unshift(run);
@@ -1577,6 +1687,9 @@ function runToRemote(r) {
     splits: r.splits,
     share_token: r.shareToken || null,
     deleted_at: null,
+    pace_history: r.paceHistory || [],
+    phase_log: r.phaseLog || [],
+    has_repetitions: !!r.hasRepetitions,
   };
 }
 function remoteToRun(row) {
@@ -1590,6 +1703,9 @@ function remoteToRun(row) {
     splits: row.splits || [],
     shareToken: row.share_token || null,
     updatedAt: row.updated_at,
+    paceHistory: row.pace_history || [],
+    phaseLog: row.phase_log || [],
+    hasRepetitions: !!row.has_repetitions,
   };
 }
 
