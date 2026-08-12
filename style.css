@@ -435,23 +435,37 @@ button:focus-visible, a:focus-visible {
 }
 .program-session.done .program-check { color: var(--good); border-color: var(--good); }
 
-.program-steps { display: flex; flex-direction: column; gap: 4px; }
+/* affichage lecture-seule d'une étape — reprend les indicateurs du formulaire */
+.program-steps { display: flex; flex-direction: column; gap: 2px; }
 .program-step-row {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
   border-bottom: 1px dashed var(--line);
-  font-size: 12px;
 }
 .program-step-row:last-child { border-bottom: none; }
-.program-step-label { color: var(--ink-dim); font-weight: 600; flex-shrink: 0; }
-.program-step-summary {
+.program-step-label { font-size: 12.5px; font-weight: 600; color: var(--ink-dim); }
+.program-step-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.meta-chip {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
+  font-size: 11px;
   color: var(--gold);
-  text-align: right;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.program-step-recup {
+  display: flex;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-faint);
 }
 
 .program-session-actions { display: flex; gap: 8px; margin-top: 2px; }

@@ -29,6 +29,9 @@ const EF_ZONE = { min: 425, max: 496 };
 // formulaire d'étape (±0,3 km/h, convertie en secondes/km à la sauvegarde)
 const SPEED_MARGIN_KMH = 0.3;
 
+// fenêtre de lissage pour l'allure surveillée pendant une course active
+const PACE_SMOOTHING_WINDOW_MS = 10000;
+
 const SUPABASE_URL = "https://fyuvconzpqglvhufixzv.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_YFi6gTCa6b6i5APTxMT6vg_x06ofpEr";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -51,7 +54,7 @@ const DEFAULT_TRAINING_PLAN = {
       ]},
       { id: "s1-2", name: "Fractionné court", steps: [
         { type: "continu", label: "Échauffement", durationSec: 900, paceMinSec: 425, paceMaxSec: 496 },
-        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 5, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, restBetweenSetsSec: 0, restLabel: "Récupération" },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 5, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, restBetweenSetsSec: 0, restLabel: "Intra récup" },
         { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
       ]},
     ]},
@@ -61,7 +64,7 @@ const DEFAULT_TRAINING_PLAN = {
       ]},
       { id: "s2-2", name: "Fractionné court", steps: [
         { type: "continu", label: "Échauffement", durationSec: 900, paceMinSec: 425, paceMaxSec: 496 },
-        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 8, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, restBetweenSetsSec: 0, restLabel: "Récupération" },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 8, workSec: 60, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 60, restBetweenSetsSec: 0, restLabel: "Intra récup" },
         { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
       ]},
     ]},
@@ -71,7 +74,7 @@ const DEFAULT_TRAINING_PLAN = {
       ]},
       { id: "s3-2", name: "30/30", steps: [
         { type: "continu", label: "Échauffement", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
-        { type: "repetitions", label: "30/30", sets: 2, reps: 6, workSec: 30, workPaceMinSec: 283, workPaceMaxSec: 298, restSec: 30, restBetweenSetsSec: 90, restLabel: "Récupération" },
+        { type: "repetitions", label: "30/30", sets: 2, reps: 6, workSec: 30, workPaceMinSec: 283, workPaceMaxSec: 298, restSec: 30, restBetweenSetsSec: 90, restLabel: "Intra récup" },
         { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
       ]},
     ]},
@@ -81,7 +84,7 @@ const DEFAULT_TRAINING_PLAN = {
       ]},
       { id: "s4-2", name: "Fractionné moyen", steps: [
         { type: "continu", label: "Échauffement", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
-        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 5, workSec: 120, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 90, restBetweenSetsSec: 0, restLabel: "Récup active" },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 5, workSec: 120, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 90, restBetweenSetsSec: 0, restLabel: "Intra récup" },
         { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
       ]},
       { id: "s4-3", name: "Endurance légère", steps: [
@@ -94,7 +97,7 @@ const DEFAULT_TRAINING_PLAN = {
       ]},
       { id: "s5-2", name: "Fractionné long", steps: [
         { type: "continu", label: "Échauffement", durationSec: 900, paceMinSec: 425, paceMaxSec: 496 },
-        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 4, workSec: 180, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 120, restBetweenSetsSec: 0, restLabel: "Récup active" },
+        { type: "repetitions", label: "Allure rapide", sets: 1, reps: 4, workSec: 180, workPaceMinSec: 344, workPaceMaxSec: 356, restSec: 120, restBetweenSetsSec: 0, restLabel: "Intra récup" },
         { type: "continu", label: "Retour au calme", durationSec: 600, paceMinSec: 425, paceMaxSec: 496 },
       ]},
     ]},
@@ -158,7 +161,6 @@ let syncing = false;
 // ---------- moteur de phases (séances du programme) ----------
 let phaseSequence = [];
 let phaseIndex = -1;
-let paceAlertState = "in"; // "in" | "out" — déclenchement uniquement au changement d'état
 
 let tracking = {
   active: false,
@@ -177,6 +179,8 @@ let tracking = {
   marker: null,
   wakeLock: null,
   screenLocked: false,
+  recentSamples: [],  // {t, distanceM} — pour l'allure lissée sur 10s
+  uiTicks: 0,
 };
 
 // ---------- persistence ----------
@@ -456,14 +460,6 @@ function updateActiveSessionBadge() {
   }
 }
 
-function stepSummary(step) {
-  if (step.type === "continu") {
-    return `${formatMMSS(step.durationSec || 0)} · ${fmtPace(step.paceMinSec)}–${fmtPace(step.paceMaxSec)}/km`;
-  }
-  const setsPart = (step.sets || 1) > 1 ? `${step.sets}×` : "";
-  return `${setsPart}${step.reps}×${formatMMSS(step.workSec || 0)} à ${fmtPace(step.workPaceMinSec)}–${fmtPace(step.workPaceMaxSec)}/km · récup ${formatMMSS(step.restSec || 0)}`;
-}
-
 // Une seule allure est saisie dans le formulaire ; min/max sont dérivés en
 // appliquant ±0,3 km/h autour de cette valeur centrale, convertis en sec/km.
 function paceZoneFromCenter(centerPaceSec) {
@@ -481,6 +477,38 @@ function paceZoneFromCenter(centerPaceSec) {
 function centerPaceFromZone(minSec, maxSec) {
   if (minSec == null || maxSec == null) return Math.round((EF_ZONE.min + EF_ZONE.max) / 2);
   return Math.round((minSec + maxSec) / 2);
+}
+
+// ---- affichage lecture seule d'une étape (reprend les mêmes indicateurs
+// Δt / v / × / Intra-Extra récup que le formulaire d'édition) ----
+function stepDisplayHTML(step) {
+  if (step.type === "continu") {
+    const center = centerPaceFromZone(step.paceMinSec, step.paceMaxSec);
+    return `
+      <div class="program-step-row">
+        <div class="program-step-label">${step.label || "Continue"}</div>
+        <div class="program-step-meta">
+          <span class="meta-chip"><span class="field-icon">Δt</span>${formatMMSS(step.durationSec || 0)}</span>
+          <span class="meta-chip"><span class="field-icon field-icon-v">v</span>${formatMMSS(center)}</span>
+        </div>
+      </div>
+    `;
+  }
+  const center = centerPaceFromZone(step.workPaceMinSec, step.workPaceMaxSec);
+  const setsPrefix = (step.sets || 1) > 1 ? `${step.sets} <span class="field-times">×</span> ` : "";
+  return `
+    <div class="program-step-row">
+      <div class="program-step-label">${step.label || "Répétitions"}</div>
+      <div class="program-step-meta">
+        <span class="meta-chip">${setsPrefix}${step.reps} <span class="field-times">×</span> <span class="field-icon">Δt</span>${formatMMSS(step.workSec || 0)}</span>
+        <span class="meta-chip"><span class="field-icon field-icon-v">v</span>${formatMMSS(center)}</span>
+      </div>
+      <div class="program-step-recup">
+        <span>Intra récup ${formatMMSS(step.restSec || 0)}</span>
+        ${(step.sets || 1) > 1 ? `<span>Extra récup ${formatMMSS(step.restBetweenSetsSec || 0)}</span>` : ""}
+      </div>
+    </div>
+  `;
 }
 
 function stepEditorRowHTML(step, i) {
@@ -503,35 +531,35 @@ function stepEditorRowHTML(step, i) {
         <div class="step-fields-row step-fields-continu">
           <div class="field-with-icon">
             <span class="field-icon">Δt</span>
-            <input class="step-duration mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.durationSec || 0)}" />
+            <input class="step-duration mmss-input account-input" data-i="${i}" inputmode="numeric" pattern="[0-9:]*" placeholder="mm:ss" value="${formatMMSS(step.durationSec || 0)}" />
           </div>
           <div class="field-with-icon">
             <span class="field-icon field-icon-v">v</span>
-            <input class="step-pace mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(centerPaceFromZone(step.paceMinSec, step.paceMaxSec))}" />
+            <input class="step-pace mmss-input account-input" data-i="${i}" inputmode="numeric" pattern="[0-9:]*" placeholder="mm:ss" value="${formatMMSS(centerPaceFromZone(step.paceMinSec, step.paceMaxSec))}" />
           </div>
         </div>
       ` : `
-        <input class="step-sets account-input step-sets-input" data-i="${i}" type="number" min="1" placeholder="Séries" value="${step.sets || 1}" />
+        <input class="step-sets account-input step-sets-input" data-i="${i}" type="number" inputmode="numeric" min="1" placeholder="Séries" value="${step.sets || 1}" />
         <div class="step-fields-row step-fields-rep">
-          <input class="step-reps account-input step-reps-input" data-i="${i}" type="number" min="1" placeholder="Rép." value="${step.reps || 1}" />
+          <input class="step-reps account-input step-reps-input" data-i="${i}" type="number" inputmode="numeric" min="1" placeholder="Rép." value="${step.reps || 1}" />
           <span class="field-times">×</span>
           <div class="field-with-icon">
             <span class="field-icon">Δt</span>
-            <input class="step-worksec mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.workSec || 60)}" />
+            <input class="step-worksec mmss-input account-input" data-i="${i}" inputmode="numeric" pattern="[0-9:]*" placeholder="mm:ss" value="${formatMMSS(step.workSec || 60)}" />
           </div>
           <div class="field-with-icon">
             <span class="field-icon field-icon-v">v</span>
-            <input class="step-pace mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(centerPaceFromZone(step.workPaceMinSec, step.workPaceMaxSec))}" />
+            <input class="step-pace mmss-input account-input" data-i="${i}" inputmode="numeric" pattern="[0-9:]*" placeholder="mm:ss" value="${formatMMSS(centerPaceFromZone(step.workPaceMinSec, step.workPaceMaxSec))}" />
           </div>
         </div>
         <div class="step-fields-row">
           <div class="field-with-label">
             <span class="field-label-text">Intra récup</span>
-            <input class="step-restsec mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.restSec || 60)}" />
+            <input class="step-restsec mmss-input account-input" data-i="${i}" inputmode="numeric" pattern="[0-9:]*" placeholder="mm:ss" value="${formatMMSS(step.restSec || 60)}" />
           </div>
           <div class="field-with-label">
             <span class="field-label-text">Extra récup</span>
-            <input class="step-restbetween mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.restBetweenSetsSec || 0)}" />
+            <input class="step-restbetween mmss-input account-input" data-i="${i}" inputmode="numeric" pattern="[0-9:]*" placeholder="mm:ss" value="${formatMMSS(step.restBetweenSetsSec || 0)}" />
           </div>
         </div>
       `}
@@ -567,7 +595,7 @@ function collectStepsFromForm() {
       workPaceMaxSec: zone.max,
       restSec: parseMMSS(row.querySelector(".step-restsec").value) || 60,
       restBetweenSetsSec: parseMMSS(row.querySelector(".step-restbetween").value) || 0,
-      restLabel: "Récupération",
+      restLabel: "Intra récup",
     };
   });
 }
@@ -616,12 +644,7 @@ function renderProgram() {
             <button class="program-check" data-action="check" data-id="${s.id}">${trainingDone[s.id] ? "✓ Fait" : "Marquer fait"}</button>
           </div>
           <div class="program-steps">
-            ${(s.steps || []).map((st) => `
-              <div class="program-step-row">
-                <span class="program-step-label">${st.label || (st.type === "continu" ? "Continue" : "Répétitions")}</span>
-                <span class="program-step-summary">${stepSummary(st)}</span>
-              </div>
-            `).join("")}
+            ${(s.steps || []).map((st) => stepDisplayHTML(st)).join("")}
           </div>
           <div class="program-session-actions">
             <button class="program-start" data-action="start" data-id="${s.id}">Démarrer</button>
@@ -697,7 +720,7 @@ document.getElementById("program-list").addEventListener("change", (e) => {
   const label = editingSteps[i].label;
   editingSteps[i] = e.target.value === "continu"
     ? { type: "continu", label, durationSec: 600, paceMinSec: EF_ZONE.min, paceMaxSec: EF_ZONE.max }
-    : { type: "repetitions", label, sets: 1, reps: 5, workSec: 60, workPaceMinSec: 340, workPaceMaxSec: 360, restSec: 60, restBetweenSetsSec: 0, restLabel: "Récupération" };
+    : { type: "repetitions", label, sets: 1, reps: 5, workSec: 60, workPaceMinSec: 340, workPaceMaxSec: 360, restSec: 60, restBetweenSetsSec: 0, restLabel: "Intra récup" };
   renderProgram();
 });
 // saisie guidée mm:ss : insère automatiquement les deux-points pendant la frappe
@@ -739,9 +762,9 @@ function buildPhaseSequence(session) {
           const isLastSet = set === sets;
           if (!(isLastRepOfSet && isLastSet)) {
             if (isLastRepOfSet && !isLastSet) {
-              phases.push({ kind: "restSet", label: "Récup entre séries", durationSec: step.restBetweenSetsSec || 0 });
+              phases.push({ kind: "restSet", label: "Extra récup", durationSec: step.restBetweenSetsSec || 0 });
             } else {
-              phases.push({ kind: "rest", label: step.restLabel || "Récupération", durationSec: step.restSec });
+              phases.push({ kind: "rest", label: step.restLabel || "Intra récup", durationSec: step.restSec });
             }
           }
         }
@@ -764,7 +787,6 @@ function advancePhase() {
   phase.remainingSec = phase.durationSec;
   const repInfo = phase.kind === "work" ? `, répétition ${phase.rep} sur ${phase.totalReps}` : "";
   speak(`${phase.label}${repInfo}`);
-  paceAlertState = "in"; // on redonne une chance à chaque nouvelle phase avant de réalerter
   updatePhaseUI();
 }
 
@@ -778,15 +800,36 @@ function updatePhaseUI() {
     : "";
 }
 
+// Décomptes vocaux pendant une phase en cours (pas au changement de phase,
+// déjà annoncé par advancePhase) :
+//  - continue (EF, échauffement, retour au calme) : toutes les 10 min, puis
+//    toutes les minutes sur les 5 dernières minutes
+//  - travail / récupération (intra ou extra) : toutes les 10 secondes
+function announcePhaseCountdown(phase) {
+  const r = phase.remainingSec;
+  if (phase.kind === "continu") {
+    if (r > 300 && r % 600 === 0) {
+      const mins = Math.round(r / 60);
+      speak(`${mins} minutes restantes`);
+    } else if (r <= 300 && r % 60 === 0) {
+      const mins = Math.round(r / 60);
+      speak(`${mins} minute${mins > 1 ? "s" : ""} restante${mins > 1 ? "s" : ""}`);
+    }
+  } else if ((phase.kind === "work" || phase.kind === "rest" || phase.kind === "restSet") && r % 10 === 0) {
+    speak(`${r} secondes`);
+  }
+}
+
 function tickPhase() {
   if (phaseIndex < 0 || phaseIndex >= phaseSequence.length) return;
   const phase = phaseSequence[phaseIndex];
   phase.remainingSec -= 1;
   if (phase.remainingSec <= 0) {
     advancePhase();
-  } else {
-    updatePhaseUI();
+    return;
   }
+  updatePhaseUI();
+  announcePhaseCountdown(phase);
 }
 
 // Zone d'allure de la phase en cours — chaque étape (continue ou répétitions)
@@ -800,19 +843,31 @@ function getCurrentTargetZone() {
   return null;
 }
 
-// L'allure surveillée est celle du segment récent (depuis le dernier km
-// complété, cf. paceNow dans updateTrackUI) — pas la moyenne globale de la
-// course — pour réagir rapidement à un changement de rythme.
+// Allure lissée sur les ~10 dernières secondes (à partir des points GPS
+// enregistrés), plutôt que l'allure instantanée point-à-point.
+function rollingPaceSecPerKm() {
+  const samples = tracking.recentSamples;
+  if (samples.length < 2) return null;
+  const now = Date.now();
+  let ref = samples[0];
+  for (const s of samples) {
+    if (now - s.t <= PACE_SMOOTHING_WINDOW_MS) { ref = s; break; }
+  }
+  const distM = tracking.distanceM - ref.distanceM;
+  const timeSec = (now - ref.t) / 1000;
+  if (distM < 5 || timeSec < 2) return null; // pas assez de signal pour une estimation fiable
+  return timeSec / (distM / 1000);
+}
+
+// Répète l'alerte toutes les 2 secondes tant que l'allure lissée reste hors
+// de la fourchette cible ; silencieux dès le retour dans la zone.
 function checkPaceAlert(currentPaceSecPerKm) {
   const zone = getCurrentTargetZone();
   if (!zone || !isFinite(currentPaceSecPerKm) || currentPaceSecPerKm <= 0) return;
   const inZone = currentPaceSecPerKm >= zone.min && currentPaceSecPerKm <= zone.max;
-  if (!inZone && paceAlertState !== "out") {
-    paceAlertState = "out";
+  if (!inZone) {
     if (currentPaceSecPerKm < zone.min) speak("Trop rapide, ralentis");
     else speak("Trop lent, accélère");
-  } else if (inZone) {
-    paceAlertState = "in";
   }
 }
 
@@ -1275,6 +1330,8 @@ function startRun() {
     marker: null,
     wakeLock: null,
     screenLocked: false,
+    recentSamples: [],
+    uiTicks: 0,
   };
   showScreen("screen-track");
   document.getElementById("lock-overlay").classList.remove("show");
@@ -1284,7 +1341,6 @@ function startRun() {
   updateTrackUI();
   setGpsStatus("searching", "Recherche du signal…");
 
-  paceAlertState = "in";
   phaseSequence = activeSession ? buildPhaseSequence(activeSession) : [];
   phaseIndex = -1;
   if (phaseSequence.length > 0) {
@@ -1331,6 +1387,9 @@ function onPosition(pos) {
       tracking.path.push(point);
       updateMapLine();
       checkSplit();
+      const now = Date.now();
+      tracking.recentSamples.push({ t: now, distanceM: tracking.distanceM });
+      tracking.recentSamples = tracking.recentSamples.filter((s) => now - s.t <= PACE_SMOOTHING_WINDOW_MS + 5000);
     }
   } else if (tracking.path.length === 0) {
     tracking.path.push(point);
@@ -1373,7 +1432,9 @@ function updateTrackUI() {
   const avgPace = tracking.distanceM > 0 ? elapsed / (tracking.distanceM / 1000) : 0;
   document.getElementById("track-pace-avg").textContent = fmtPace(avgPace);
 
-  // allure "actuelle" : sur le dernier segment depuis le dernier split (ou depuis le départ)
+  // allure "actuelle" affichée à l'écran : sur le dernier segment depuis le
+  // dernier split (ou depuis le départ) — distincte de l'allure lissée 10s
+  // utilisée pour l'alerte vocale (rollingPaceSecPerKm)
   const sinceSplitM = tracking.distanceM - tracking.lastSplitDistanceM;
   const sinceSplitSec = (Date.now() - tracking.lastSplitTime) / 1000;
   const paceNow = sinceSplitM > 20 ? sinceSplitSec / (sinceSplitM / 1000) : avgPace;
@@ -1387,7 +1448,11 @@ function updateTrackUI() {
 
   if (!tracking.paused) {
     tickPhase();
-    checkPaceAlert(paceNow);
+    tracking.uiTicks = (tracking.uiTicks || 0) + 1;
+    if (tracking.uiTicks % 2 === 0) {
+      const smoothPace = rollingPaceSecPerKm();
+      if (smoothPace != null) checkPaceAlert(smoothPace);
+    }
   }
 }
 
