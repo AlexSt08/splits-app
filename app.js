@@ -25,6 +25,10 @@ const MIN_STEP_M = 3;           // ignore le bruit GPS sous ce seuil
 // formulaire d'édition d'une étape "continue"
 const EF_ZONE = { min: 425, max: 496 };
 
+// marge automatique appliquée autour de l'allure unique saisie dans le
+// formulaire d'étape (±0,3 km/h, convertie en secondes/km à la sauvegarde)
+const SPEED_MARGIN_KMH = 0.3;
+
 const SUPABASE_URL = "https://fyuvconzpqglvhufixzv.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_YFi6gTCa6b6i5APTxMT6vg_x06ofpEr";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -460,6 +464,25 @@ function stepSummary(step) {
   return `${setsPart}${step.reps}×${formatMMSS(step.workSec || 0)} à ${fmtPace(step.workPaceMinSec)}–${fmtPace(step.workPaceMaxSec)}/km · récup ${formatMMSS(step.restSec || 0)}`;
 }
 
+// Une seule allure est saisie dans le formulaire ; min/max sont dérivés en
+// appliquant ±0,3 km/h autour de cette valeur centrale, convertis en sec/km.
+function paceZoneFromCenter(centerPaceSec) {
+  const base = centerPaceSec && centerPaceSec > 0 ? centerPaceSec : Math.round((EF_ZONE.min + EF_ZONE.max) / 2);
+  const speedKmh = 3600 / base;
+  const speedSlow = Math.max(0.1, speedKmh - SPEED_MARGIN_KMH);
+  const speedFast = speedKmh + SPEED_MARGIN_KMH;
+  return {
+    min: Math.round(3600 / speedFast), // borne rapide (vitesse la plus haute)
+    max: Math.round(3600 / speedSlow), // borne lente (vitesse la plus basse)
+  };
+}
+// Reconstruit l'allure centrale à afficher dans le champ à partir d'une
+// zone min/max déjà enregistrée (édition d'une étape existante).
+function centerPaceFromZone(minSec, maxSec) {
+  if (minSec == null || maxSec == null) return Math.round((EF_ZONE.min + EF_ZONE.max) / 2);
+  return Math.round((minSec + maxSec) / 2);
+}
+
 function stepEditorRowHTML(step, i) {
   const isRep = step.type === "repetitions";
   return `
@@ -477,23 +500,40 @@ function stepEditorRowHTML(step, i) {
       </div>
       <input class="step-label account-input" data-i="${i}" placeholder="Libellé (ex. Échauffement)" value="${(step.label || "").replace(/"/g, "&quot;")}" />
       ${!isRep ? `
-        <div class="step-fields-row">
-          <input class="step-duration account-input" data-i="${i}" placeholder="Durée mm:ss" value="${formatMMSS(step.durationSec || 0)}" />
-          <input class="step-pace-min account-input" data-i="${i}" placeholder="Allure rapide" value="${formatMMSS(step.paceMinSec != null ? step.paceMinSec : EF_ZONE.min)}" />
-          <input class="step-pace-max account-input" data-i="${i}" placeholder="Allure lente" value="${formatMMSS(step.paceMaxSec != null ? step.paceMaxSec : EF_ZONE.max)}" />
+        <div class="step-fields-row step-fields-continu">
+          <div class="field-with-icon">
+            <span class="field-icon">Δt</span>
+            <input class="step-duration mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.durationSec || 0)}" />
+          </div>
+          <div class="field-with-icon">
+            <span class="field-icon field-icon-v">v</span>
+            <input class="step-pace mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(centerPaceFromZone(step.paceMinSec, step.paceMaxSec))}" />
+          </div>
         </div>
       ` : `
-        <div class="step-fields-row">
-          <input class="step-sets account-input" data-i="${i}" type="number" min="1" placeholder="Séries" value="${step.sets || 1}" />
-          <input class="step-reps account-input" data-i="${i}" type="number" min="1" placeholder="Répétitions" value="${step.reps || 1}" />
-          <input class="step-worksec account-input" data-i="${i}" placeholder="Durée mm:ss" value="${formatMMSS(step.workSec || 60)}" />
+        <input class="step-sets account-input step-sets-input" data-i="${i}" type="number" min="1" placeholder="Séries" value="${step.sets || 1}" />
+        <div class="step-fields-row step-fields-rep">
+          <input class="step-reps account-input step-reps-input" data-i="${i}" type="number" min="1" placeholder="Rép." value="${step.reps || 1}" />
+          <span class="field-times">×</span>
+          <div class="field-with-icon">
+            <span class="field-icon">Δt</span>
+            <input class="step-worksec mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.workSec || 60)}" />
+          </div>
+          <div class="field-with-icon">
+            <span class="field-icon field-icon-v">v</span>
+            <input class="step-pace mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(centerPaceFromZone(step.workPaceMinSec, step.workPaceMaxSec))}" />
+          </div>
         </div>
         <div class="step-fields-row">
-          <input class="step-pace-min account-input" data-i="${i}" placeholder="Allure rapide" value="${formatMMSS(step.workPaceMinSec != null ? step.workPaceMinSec : 340)}" />
-          <input class="step-pace-max account-input" data-i="${i}" placeholder="Allure lente" value="${formatMMSS(step.workPaceMaxSec != null ? step.workPaceMaxSec : 360)}" />
-          <input class="step-restsec account-input" data-i="${i}" placeholder="Récup mm:ss" value="${formatMMSS(step.restSec || 60)}" />
+          <div class="field-with-label">
+            <span class="field-label-text">Intra récup</span>
+            <input class="step-restsec mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.restSec || 60)}" />
+          </div>
+          <div class="field-with-label">
+            <span class="field-label-text">Extra récup</span>
+            <input class="step-restbetween mmss-input account-input" data-i="${i}" placeholder="mm:ss" value="${formatMMSS(step.restBetweenSetsSec || 0)}" />
+          </div>
         </div>
-        <input class="step-restbetween account-input" data-i="${i}" placeholder="Récup entre séries mm:ss (si plusieurs séries)" value="${formatMMSS(step.restBetweenSetsSec || 0)}" />
       `}
     </div>
   `;
@@ -505,22 +545,26 @@ function collectStepsFromForm() {
     const type = row.querySelector(".step-type").value;
     const label = row.querySelector(".step-label").value.trim();
     if (type === "continu") {
+      const center = parseMMSS(row.querySelector(".step-pace").value);
+      const zone = paceZoneFromCenter(center);
       return {
         type: "continu",
         label,
         durationSec: parseMMSS(row.querySelector(".step-duration").value) || 0,
-        paceMinSec: parseMMSS(row.querySelector(".step-pace-min").value) || EF_ZONE.min,
-        paceMaxSec: parseMMSS(row.querySelector(".step-pace-max").value) || EF_ZONE.max,
+        paceMinSec: zone.min,
+        paceMaxSec: zone.max,
       };
     }
+    const center = parseMMSS(row.querySelector(".step-pace").value);
+    const zone = paceZoneFromCenter(center);
     return {
       type: "repetitions",
       label,
       sets: Math.max(1, parseInt(row.querySelector(".step-sets").value, 10) || 1),
       reps: Math.max(1, parseInt(row.querySelector(".step-reps").value, 10) || 1),
       workSec: parseMMSS(row.querySelector(".step-worksec").value) || 60,
-      workPaceMinSec: parseMMSS(row.querySelector(".step-pace-min").value) || 340,
-      workPaceMaxSec: parseMMSS(row.querySelector(".step-pace-max").value) || 360,
+      workPaceMinSec: zone.min,
+      workPaceMaxSec: zone.max,
       restSec: parseMMSS(row.querySelector(".step-restsec").value) || 60,
       restBetweenSetsSec: parseMMSS(row.querySelector(".step-restbetween").value) || 0,
       restLabel: "Récupération",
@@ -656,6 +700,12 @@ document.getElementById("program-list").addEventListener("change", (e) => {
     : { type: "repetitions", label, sets: 1, reps: 5, workSec: 60, workPaceMinSec: 340, workPaceMaxSec: 360, restSec: 60, restBetweenSetsSec: 0, restLabel: "Récupération" };
   renderProgram();
 });
+// saisie guidée mm:ss : insère automatiquement les deux-points pendant la frappe
+document.getElementById("program-list").addEventListener("input", (e) => {
+  if (!e.target.classList.contains("mmss-input")) return;
+  const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 5);
+  e.target.value = digits.length > 2 ? `${digits.slice(0, digits.length - 2)}:${digits.slice(-2)}` : digits;
+});
 
 // ============================================================
 // PHASE ENGINE (déroulé d'une séance) & alerte d'allure
@@ -740,7 +790,7 @@ function tickPhase() {
 }
 
 // Zone d'allure de la phase en cours — chaque étape (continue ou répétitions)
-// porte désormais sa propre allure, plus de zone par défaut au niveau séance.
+// porte sa propre allure (dérivée d'une valeur unique ±0,3 km/h à la saisie).
 function getCurrentTargetZone() {
   if (phaseIndex < 0 || phaseIndex >= phaseSequence.length) return null;
   const phase = phaseSequence[phaseIndex];
@@ -750,6 +800,9 @@ function getCurrentTargetZone() {
   return null;
 }
 
+// L'allure surveillée est celle du segment récent (depuis le dernier km
+// complété, cf. paceNow dans updateTrackUI) — pas la moyenne globale de la
+// course — pour réagir rapidement à un changement de rythme.
 function checkPaceAlert(currentPaceSecPerKm) {
   const zone = getCurrentTargetZone();
   if (!zone || !isFinite(currentPaceSecPerKm) || currentPaceSecPerKm <= 0) return;
@@ -1426,65 +1479,6 @@ document.addEventListener("visibilitychange", () => {
     syncNow({ silent: true });
   }
 });
-
-// ============================================================
-// VERROUILLAGE TACTILE — bloque les appuis accidentels (poche, brassard)
-// N'empêche PAS l'écran de s'éteindre à lui seul : combiné au Wake Lock ci-dessus.
-// ============================================================
-const lockOverlay = document.getElementById("lock-overlay");
-const lockFab = document.getElementById("btn-lock-fab");
-const unlockBtn = document.getElementById("btn-unlock-hold");
-const unlockFill = document.getElementById("unlock-fill");
-const HOLD_MS = 1400;
-let holdTimer = null;
-let holdStart = null;
-let holdRAF = null;
-
-function setScreenLock(locked) {
-  tracking.screenLocked = locked;
-  lockOverlay.classList.toggle("show", locked);
-  if (locked) updateLockReadout();
-}
-
-lockFab.addEventListener("click", () => setScreenLock(true));
-
-function updateLockReadout() {
-  if (!tracking.active) return;
-  document.getElementById("lock-dist").innerHTML = `${fmtKm(tracking.distanceM)} <span>km</span>`;
-  document.getElementById("lock-clock").textContent = fmtClock(Math.floor(currentElapsedSec()));
-  const elapsed = currentElapsedSec();
-  const avgPace = tracking.distanceM > 0 ? elapsed / (tracking.distanceM / 1000) : 0;
-  document.getElementById("lock-pace").textContent = `${fmtPace(avgPace)} /km`;
-}
-
-function startHold(e) {
-  e.preventDefault();
-  holdStart = performance.now();
-  const step = () => {
-    const pct = Math.min(100, ((performance.now() - holdStart) / HOLD_MS) * 100);
-    unlockFill.style.height = pct + "%";
-    if (pct >= 100) {
-      setScreenLock(false);
-      resetHold();
-      return;
-    }
-    holdRAF = requestAnimationFrame(step);
-  };
-  holdRAF = requestAnimationFrame(step);
-}
-function resetHold() {
-  cancelAnimationFrame(holdRAF);
-  holdRAF = null;
-  holdStart = null;
-  unlockFill.style.height = "0%";
-}
-unlockBtn.addEventListener("pointerdown", startHold);
-unlockBtn.addEventListener("pointerup", resetHold);
-unlockBtn.addEventListener("pointerleave", resetHold);
-unlockBtn.addEventListener("pointercancel", resetHold);
-
-// rafraîchit l'affichage de l'écran verrouillé en même temps que le reste
-setInterval(() => { if (tracking.active && tracking.screenLocked) updateLockReadout(); }, 1000);
 
 // ============================================================
 // BOUTON RETOUR (matériel/virtuel Android) — piégé dans l'app :
