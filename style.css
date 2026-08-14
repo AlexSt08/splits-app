@@ -344,19 +344,39 @@ button:focus-visible, a:focus-visible {
 .program-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   padding: 4px 20px 20px;
   overflow-y: auto;
 }
+
+/* en-tête de semaine pliable : bouton pleine largeur, chevron + libellé + compteur */
 .program-week-label {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-align: left;
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-dim);
   font-weight: 600;
-  margin-bottom: 8px;
+  padding: 6px 2px;
 }
+.week-chevron {
+  color: var(--ink-faint);
+  font-size: 10px;
+  width: 10px;
+  flex-shrink: 0;
+}
+.program-week-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
 .program-session {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -365,7 +385,6 @@ button:focus-visible, a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 8px;
 }
 .program-session.done { border-color: var(--good); }
 .program-session-top {
@@ -386,18 +405,32 @@ button:focus-visible, a:focus-visible {
 }
 .program-session.done .program-check { color: var(--good); border-color: var(--good); }
 
-/* affichage lecture-seule d'une étape — reprend les indicateurs du formulaire */
+/* affichage lecture-seule des étapes : grille à 2 colonnes — libellé aligné
+   à gauche (largeur fixe), paramètres (Δt/v/récup) alignés à droite, la
+   même colonne pour toutes les étapes d'une séance */
 .program-steps { display: flex; flex-direction: column; gap: 2px; }
 .program-step-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  column-gap: 10px;
+  align-items: start;
   padding: 6px 0;
   border-bottom: 1px dashed var(--line);
 }
 .program-step-row:last-child { border-bottom: none; }
-.program-step-label { font-size: 12.5px; font-weight: 600; color: var(--ink-dim); }
-.program-step-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.program-step-label {
+  grid-column: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-dim);
+  padding-top: 2px;
+}
+.program-step-meta {
+  grid-column: 2;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .meta-chip {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -412,11 +445,13 @@ button:focus-visible, a:focus-visible {
   gap: 4px;
 }
 .program-step-recup {
+  grid-column: 2;
   display: flex;
   gap: 12px;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--ink-faint);
+  margin-top: 4px;
 }
 
 .program-session-actions { display: flex; gap: 8px; margin-top: 2px; }

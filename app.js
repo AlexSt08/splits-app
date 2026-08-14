@@ -149,6 +149,7 @@ let trainingDone = loadTrainingDone();
 let activeSession = null;   // séance du programme sélectionnée pour la prochaine course
 let editingSessionId = null; // séance en cours d'édition sur l'écran Programme
 let editingSteps = null;     // copie de travail des étapes pendant l'édition
+let collapsedWeeks = null;   // Set d'index de semaines repliées (null = pas encore initialisé)
 let currentUser = null;
 let syncing = false;
 
@@ -451,8 +452,8 @@ function centerPaceFromZone(minSec, maxSec) {
   return Math.round((minSec + maxSec) / 2);
 }
 
-// ---- affichage lecture seule d'une étape (reprend les mêmes indicateurs
-// Δt / v / × / Intra-Extra récup que le formulaire d'édition) ----
+// ---- affichage lecture seule d'une étape : libellé et paramètres alignés
+// en colonnes (grille) sur toutes les étapes d'une séance ----
 function stepDisplayHTML(step) {
   if (step.type === "continu") {
     const center = centerPaceFromZone(step.paceMinSec, step.paceMaxSec);
@@ -580,18 +581,46 @@ function startEditSession(id) {
   renderProgram();
 }
 
+// Détermine l'état plié/déplié initial : tout plié, sauf la première semaine
+// où au moins une séance n'est pas encore marquée "fait". Si tout est fait,
+// tout reste plié.
+function initCollapsedWeeksIfNeeded() {
+  if (collapsedWeeks !== null) return;
+  collapsedWeeks = new Set();
+  let targetIdx = -1;
+  trainingPlan.weeks.forEach((w, i) => {
+    if (targetIdx !== -1) return;
+    const doneCount = w.sessions.filter((s) => trainingDone[s.id]).length;
+    if (doneCount < w.sessions.length) targetIdx = i;
+  });
+  trainingPlan.weeks.forEach((w, i) => {
+    if (i !== targetIdx) collapsedWeeks.add(i);
+  });
+}
+
 function renderProgram() {
   document.getElementById("program-block-name").textContent = trainingPlan.name || "Programme";
   const list = document.getElementById("program-list");
   list.innerHTML = "";
-  trainingPlan.weeks.forEach((w) => {
+  initCollapsedWeeksIfNeeded();
+
+  trainingPlan.weeks.forEach((w, wIdx) => {
     const weekEl = document.createElement("div");
     weekEl.className = "program-week";
     const doneCount = w.sessions.filter((s) => trainingDone[s.id]).length;
-    const header = document.createElement("div");
-    header.className = "program-week-label";
-    header.textContent = `${w.label} · ${doneCount}/${w.sessions.length}`;
-    weekEl.appendChild(header);
+    const isCollapsed = collapsedWeeks.has(wIdx);
+
+    const headerBtn = document.createElement("button");
+    headerBtn.type = "button";
+    headerBtn.className = "program-week-label";
+    headerBtn.dataset.action = "toggle-week";
+    headerBtn.dataset.week = String(wIdx);
+    headerBtn.innerHTML = `<span class="week-chevron">${isCollapsed ? "▸" : "▾"}</span> ${w.label} · ${doneCount}/${w.sessions.length}`;
+    weekEl.appendChild(headerBtn);
+
+    const body = document.createElement("div");
+    body.className = "program-week-body";
+    body.style.display = isCollapsed ? "none" : "flex";
 
     w.sessions.forEach((s) => {
       const card = document.createElement("div");
@@ -624,8 +653,10 @@ function renderProgram() {
           </div>
         `;
       }
-      weekEl.appendChild(card);
+      body.appendChild(card);
     });
+
+    weekEl.appendChild(body);
     list.appendChild(weekEl);
   });
 }
@@ -635,7 +666,12 @@ document.getElementById("program-list").addEventListener("click", (e) => {
   if (!btn) return;
   const action = btn.dataset.action;
 
-  if (action === "check") {
+  if (action === "toggle-week") {
+    const idx = Number(btn.dataset.week);
+    if (collapsedWeeks.has(idx)) collapsedWeeks.delete(idx);
+    else collapsedWeeks.add(idx);
+    renderProgram();
+  } else if (action === "check") {
     const id = btn.dataset.id;
     if (trainingDone[id]) delete trainingDone[id];
     else trainingDone[id] = new Date().toISOString();
@@ -1033,9 +1069,10 @@ document.getElementById("btn-save-program-json").addEventListener("click", () =>
     const parsed = JSON.parse(document.getElementById("program-json").value);
     if (!parsed.weeks || !Array.isArray(parsed.weeks)) throw new Error("format invalide");
     trainingPlan = parsed;
-    saveTrainingPlan(trainingPlan);
+    collapsedWeeks = null; // recalculé au prochain rendu, le plan a pu changer de structure
     document.getElementById("program-editor").style.display = "none";
     renderProgram();
+    saveTrainingPlan(trainingPlan);
     toast("Programme mis à jour");
   } catch (e) {
     toast("JSON invalide — vérifie la syntaxe");
