@@ -825,24 +825,20 @@ button:focus-visible, a:focus-visible {
 .ctrl-btn.resume { background: var(--good); color: #0e1a12; }
 
 /* ---------- lock (verrou tactile) ---------- */
-.lock-fab {
-  position: fixed;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--surface-raised);
-  border: 1px solid var(--line);
-  color: var(--ink-dim);
+/* bouton icône intégré à la rangée .track-controls, plutôt qu'un FAB en
+   position fixed — évite tout chevauchement avec Pause/Terminer, quel
+   que soit l'appareil ou la hauteur de la tabbar. */
+.ctrl-btn.lock {
+  flex: 0 0 54px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(0,0,0,.35);
-  z-index: 50;
+  background: var(--surface-raised);
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
 }
-.lock-fab:active { transform: translateX(-50%) scale(0.94); }
+.ctrl-btn.lock:active { color: var(--ink); }
 
 .lock-overlay {
   position: fixed;

@@ -1379,6 +1379,7 @@ function openDetail(id) {
 document.getElementById("btn-start-run").addEventListener("click", startRun);
 document.getElementById("btn-pause").addEventListener("click", togglePause);
 document.getElementById("btn-stop").addEventListener("click", stopRun);
+document.getElementById("btn-lock-fab").addEventListener("click", () => setScreenLock(true));
 
 function setGpsStatus(state, text) {
   const el = document.getElementById("gps-status");
@@ -1416,7 +1417,6 @@ function startRun() {
   };
   showScreen("screen-track");
   document.getElementById("lock-overlay").classList.remove("show");
-  document.getElementById("btn-lock-fab").style.display = "flex";
   document.getElementById("btn-pause").textContent = "Pause";
   document.getElementById("btn-pause").className = "ctrl-btn pause";
   updateTrackUI();
@@ -1538,6 +1538,8 @@ function updateTrackUI() {
       }
     }
   }
+
+  if (tracking.screenLocked) updateLockReadout();
 }
 
 function togglePause() {
@@ -1558,6 +1560,72 @@ function togglePause() {
   }
 }
 
+// ---------- verrou d'écran pendant une course ----------
+const UNLOCK_HOLD_MS = 800;
+let unlockHoldRAF = null;
+let unlockHoldStart = null;
+
+function setScreenLock(locked) {
+  tracking.screenLocked = locked;
+  const overlay = document.getElementById("lock-overlay");
+  if (locked) {
+    updateLockReadout();
+    overlay.classList.add("show");
+  } else {
+    overlay.classList.remove("show");
+    cancelUnlockHold();
+  }
+}
+
+function updateLockReadout() {
+  if (!tracking.active) return;
+  document.getElementById("lock-dist").innerHTML = fmtKm(tracking.distanceM) + ' <span>km</span>';
+  document.getElementById("lock-clock").textContent = fmtClock(Math.floor(currentElapsedSec()));
+  const elapsed = currentElapsedSec();
+  const avgPace = tracking.distanceM > 0 ? elapsed / (tracking.distanceM / 1000) : 0;
+  document.getElementById("lock-pace").textContent = fmtPace(avgPace) + " /km";
+}
+
+function startUnlockHold() {
+  cancelUnlockHold();
+  const fill = document.getElementById("unlock-fill");
+  fill.style.transition = "none";
+  unlockHoldStart = performance.now();
+  const step = (now) => {
+    const pct = Math.min(100, ((now - unlockHoldStart) / UNLOCK_HOLD_MS) * 100);
+    fill.style.height = pct + "%";
+    if (pct >= 100) {
+      unlockHoldRAF = null;
+      setScreenLock(false);
+      return;
+    }
+    unlockHoldRAF = requestAnimationFrame(step);
+  };
+  unlockHoldRAF = requestAnimationFrame(step);
+}
+
+function cancelUnlockHold() {
+  if (unlockHoldRAF != null) {
+    cancelAnimationFrame(unlockHoldRAF);
+    unlockHoldRAF = null;
+  }
+  unlockHoldStart = null;
+  const fill = document.getElementById("unlock-fill");
+  if (fill) {
+    fill.style.transition = "height 0.2s ease";
+    fill.style.height = "0%";
+  }
+}
+
+const unlockHoldBtn = document.getElementById("btn-unlock-hold");
+unlockHoldBtn.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  startUnlockHold();
+});
+unlockHoldBtn.addEventListener("pointerup", cancelUnlockHold);
+unlockHoldBtn.addEventListener("pointerleave", cancelUnlockHold);
+unlockHoldBtn.addEventListener("pointercancel", cancelUnlockHold);
+
 function stopRun() {
   if (tracking.distanceM < 50) {
     if (!confirm("Course très courte (< 50 m). Terminer et l'enregistrer quand même ?")) return;
@@ -1566,7 +1634,6 @@ function stopRun() {
   if (tracking.watchId != null) navigator.geolocation.clearWatch(tracking.watchId);
   releaseWakeLock();
   setScreenLock(false);
-  document.getElementById("btn-lock-fab").style.display = "none";
   document.getElementById("phase-bar").style.display = "none";
   phaseSequence = [];
   phaseIndex = -1;
