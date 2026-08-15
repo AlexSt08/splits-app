@@ -27,6 +27,18 @@ const SPEED_MARGIN_KMH = 0.3;
 
 // fenêtre de lissage pour l'allure surveillée pendant une course active
 const PACE_SMOOTHING_WINDOW_MS = 10000;
+const PREP_COUNTDOWN_SEC = 10;
+const TRANSITION_COUNTDOWN_SEC = 10;
+
+// Allure moyenne affichée/sauvegardée : en séance programme, ne reflète que
+// les blocs "continu" (récup et répétitions exclues) ; en course libre,
+// distance/temps totaux comme avant.
+function getDisplayAvgPace() {
+  if (activeSession) {
+    return tracking.continuDistanceM > 0 ? tracking.continuElapsedSec / (tracking.continuDistanceM / 1000) : 0;
+  }
+  return tracking.distanceM > 0 ? currentElapsedSec() / (tracking.distanceM / 1000) : 0;
+}
 
 const SUPABASE_URL = "https://fyuvconzpqglvhufixzv.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_YFi6gTCa6b6i5APTxMT6vg_x06ofpEr";
@@ -741,43 +753,60 @@ document.getElementById("program-list").addEventListener("input", (e) => {
 // ============================================================
 // PHASE ENGINE (déroulé d'une séance) & alerte d'allure
 // ============================================================
-function buildPhaseSequence(session) {
+function buildPhasesForStep(step) {
   const phases = [];
-  (session.steps || []).forEach((step) => {
-    if (step.type === "continu") {
-      if (step.durationSec > 0) {
+  if (step.type === "continu") {
+    if (step.durationSec > 0) {
+      phases.push({
+        kind: "continu",
+        label: step.label || "Continu",
+        durationSec: step.durationSec,
+        paceMinSec: step.paceMinSec,
+        paceMaxSec: step.paceMaxSec,
+      });
+    }
+  } else if (step.type === "repetitions") {
+    const sets = step.sets || 1;
+    for (let set = 1; set <= sets; set++) {
+      for (let rep = 1; rep <= step.reps; rep++) {
         phases.push({
-          kind: "continu",
-          label: step.label || "Continu",
-          durationSec: step.durationSec,
-          paceMinSec: step.paceMinSec,
-          paceMaxSec: step.paceMaxSec,
+          kind: "work",
+          label: step.label || "Allure rapide",
+          durationSec: step.workSec,
+          paceMinSec: step.workPaceMinSec,
+          paceMaxSec: step.workPaceMaxSec,
+          rep, totalReps: step.reps, set, totalSets: sets,
         });
-      }
-    } else if (step.type === "repetitions") {
-      const sets = step.sets || 1;
-      for (let set = 1; set <= sets; set++) {
-        for (let rep = 1; rep <= step.reps; rep++) {
-          phases.push({
-            kind: "work",
-            label: step.label || "Allure rapide",
-            durationSec: step.workSec,
-            paceMinSec: step.workPaceMinSec,
-            paceMaxSec: step.workPaceMaxSec,
-            rep, totalReps: step.reps, set, totalSets: sets,
-          });
-          const isLastRepOfSet = rep === step.reps;
-          const isLastSet = set === sets;
-          if (!(isLastRepOfSet && isLastSet)) {
-            if (isLastRepOfSet && !isLastSet) {
-              phases.push({ kind: "restSet", label: "Extra récup", durationSec: step.restBetweenSetsSec || 0 });
-            } else {
-              phases.push({ kind: "rest", label: step.restLabel || "Intra récup", durationSec: step.restSec });
-            }
+        const isLastRepOfSet = rep === step.reps;
+        const isLastSet = set === sets;
+        if (!(isLastRepOfSet && isLastSet)) {
+          if (isLastRepOfSet && !isLastSet) {
+            phases.push({ kind: "restSet", label: "Extra récup", durationSec: step.restBetweenSetsSec || 0 });
+          } else {
+            phases.push({ kind: "rest", label: step.restLabel || "Intra récup", durationSec: step.restSec });
           }
         }
       }
     }
+  }
+  return phases;
+}
+
+// Insère une phase "transition" (décompte de 10s annoncé) uniquement au
+// passage d'un type de bloc à un autre (continu <-> répétitions), jamais
+// entre deux répétitions ni entre travail/récup d'un même bloc.
+function buildPhaseSequence(session) {
+  const steps = session.steps || [];
+  const phases = [];
+  steps.forEach((step, i) => {
+    if (i > 0 && steps[i - 1].type !== step.type) {
+      phases.push({
+        kind: "transition",
+        label: `Changement de bloc dans ${TRANSITION_COUNTDOWN_SEC} secondes`,
+        durationSec: TRANSITION_COUNTDOWN_SEC,
+      });
+    }
+    phases.push(...buildPhasesForStep(step));
   });
   return phases.filter((p) => p.durationSec > 0);
 }
@@ -835,6 +864,8 @@ function announcePhaseCountdown(phase) {
       const mins = Math.round(r / 60);
       speak(`${mins} minute${mins > 1 ? "s" : ""} restante${mins > 1 ? "s" : ""}`);
     }
+  } else if (phase.kind === "transition") {
+    if (r <= 5 && r >= 1) speak(String(r));
   } else if ((phase.kind === "work" || phase.kind === "rest" || phase.kind === "restSet") && r % 10 === 0) {
     speak(`${r} secondes`);
   }
@@ -879,15 +910,17 @@ function rollingPaceSecPerKm() {
   return timeSec / (distM / 1000);
 }
 
-// Répète l'alerte toutes les 2 secondes tant que l'allure lissée reste hors
+// Répète l'alerte toutes les 5 secondes tant que l'allure lissée reste hors
 // de la fourchette cible ; silencieux dès le retour dans la zone.
 function checkPaceAlert(currentPaceSecPerKm) {
   const zone = getCurrentTargetZone();
   if (!zone || !isFinite(currentPaceSecPerKm) || currentPaceSecPerKm <= 0) return;
   const inZone = currentPaceSecPerKm >= zone.min && currentPaceSecPerKm <= zone.max;
   if (!inZone) {
-    if (currentPaceSecPerKm < zone.min) speak("Trop rapide, ralentis");
-    else speak("Trop lent, accélère");
+    const mins = Math.floor(currentPaceSecPerKm / 60);
+    const secs = String(Math.round(currentPaceSecPerKm % 60)).padStart(2, "0");
+    const directive = currentPaceSecPerKm < zone.min ? "Ralentir" : "Accélérer";
+    speak(`${directive}, allure ${mins} ${secs}`);
   }
 }
 
@@ -1414,13 +1447,70 @@ function startRun() {
     uiTicks: 0,
     paceHistory: [],
     phaseLog: [],
+    prepping: true,
+    continuDistanceM: 0,
+    continuElapsedSec: 0,
+    repDistanceM: 0,
+    repElapsedSec: 0,
   };
   showScreen("screen-track");
   document.getElementById("lock-overlay").classList.remove("show");
   document.getElementById("btn-pause").textContent = "Pause";
   document.getElementById("btn-pause").className = "ctrl-btn pause";
+  document.getElementById("track-status").textContent = "PRÉPARATION";
   updateTrackUI();
   setGpsStatus("searching", "Recherche du signal…");
+
+  const hasRepBlocks = !!(activeSession && activeSession.steps && activeSession.steps.some((s) => s.type === "repetitions"));
+  document.getElementById("track-pace-rep-cell").style.display = hasRepBlocks ? "" : "none";
+  document.getElementById("track-pace-rep").textContent = "—'—\"";
+
+  // GPS démarré tout de suite (pour avoir un fix prêt) mais rien n'est
+  // comptabilisé tant que tracking.prepping reste vrai (cf. onPosition).
+  tracking.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
+    enableHighAccuracy: true,
+    maximumAge: 1000,
+    timeout: 15000,
+  });
+
+  requestWakeLock();
+
+  setTimeout(() => {
+    const mapEl = document.getElementById("track-map");
+    tracking.map = L.map(mapEl, { zoomControl: false, attributionControl: false }).setView([48.8566, 2.3522], 16);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(tracking.map);
+    tracking.polyline = L.polyline([], { color: "#d6432e", weight: 4 }).addTo(tracking.map);
+  }, 100);
+
+  runPrepCountdown();
+}
+
+// Décompte vocal de préparation avant le vrai départ (pas de rendu visuel
+// dédié) : rien n'est enregistré dans les statistiques durant ce délai.
+function runPrepCountdown() {
+  speak(`Départ dans ${PREP_COUNTDOWN_SEC} secondes`);
+  let remaining = PREP_COUNTDOWN_SEC;
+  const tick = () => {
+    remaining -= 1;
+    if (remaining <= 5 && remaining >= 1) speak(String(remaining));
+    if (remaining <= 0) {
+      speak("C'est parti");
+      activateRun();
+      return;
+    }
+    setTimeout(tick, 1000);
+  };
+  setTimeout(tick, 1000);
+}
+
+// Active réellement le suivi (chrono, moteur de phases) une fois le décompte
+// de préparation terminé.
+function activateRun() {
+  if (!tracking.active) return; // course arrêtée pendant le décompte
+  tracking.prepping = false;
+  tracking.startTime = Date.now();
+  tracking.lastSplitTime = Date.now();
+  document.getElementById("track-status").textContent = "EN COURSE";
 
   phaseSequence = activeSession ? buildPhaseSequence(activeSession) : [];
   phaseIndex = -1;
@@ -1431,21 +1521,7 @@ function startRun() {
     document.getElementById("phase-bar").style.display = "none";
   }
 
-  tracking.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
-    enableHighAccuracy: true,
-    maximumAge: 1000,
-    timeout: 15000,
-  });
-
   tracking.clockInterval = setInterval(updateTrackUI, 1000);
-  requestWakeLock();
-
-  setTimeout(() => {
-    const mapEl = document.getElementById("track-map");
-    tracking.map = L.map(mapEl, { zoomControl: false, attributionControl: false }).setView([48.8566, 2.3522], 16);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(tracking.map);
-    tracking.polyline = L.polyline([], { color: "#d6432e", weight: 4 }).addTo(tracking.map);
-  }, 100);
 }
 
 function onPositionError(err) {
@@ -1460,14 +1536,31 @@ function onPosition(pos) {
 
   const point = { lat: latitude, lng: longitude, t: Date.now(), accuracy };
 
+  // Préparation ou transition entre blocs : signal GPS capté mais rien
+  // n'est comptabilisé (ni distance totale, ni allure).
+  if (tracking.prepping) return;
+
   if (tracking.path.length > 0 && !tracking.paused) {
     const prev = tracking.path[tracking.path.length - 1];
     const stepM = haversineM(prev, point);
     if (stepM >= MIN_STEP_M) {
+      const stepSec = (point.t - prev.t) / 1000;
       tracking.distanceM += stepM;
       tracking.path.push(point);
       updateMapLine();
       checkSplit();
+
+      const phase = (phaseIndex >= 0 && phaseIndex < phaseSequence.length) ? phaseSequence[phaseIndex] : null;
+      if (phase && phase.kind === "continu") {
+        tracking.continuDistanceM += stepM;
+        tracking.continuElapsedSec += stepSec;
+      } else if (phase && phase.kind === "work") {
+        tracking.repDistanceM += stepM;
+        tracking.repElapsedSec += stepSec;
+      }
+      // phases "rest" / "restSet" / "transition" : comptées dans la distance
+      // totale ci-dessus, mais exclues des deux moyennes d'allure.
+
       const now = Date.now();
       tracking.recentSamples.push({ t: now, distanceM: tracking.distanceM });
       tracking.recentSamples = tracking.recentSamples.filter((s) => now - s.t <= PACE_SMOOTHING_WINDOW_MS + 5000);
@@ -1510,8 +1603,14 @@ function updateTrackUI() {
   document.getElementById("track-clock").innerHTML = clockStr.replace(":", '<span class="blink">:</span>');
   document.getElementById("track-dist").textContent = fmtKm(tracking.distanceM);
 
-  const avgPace = tracking.distanceM > 0 ? elapsed / (tracking.distanceM / 1000) : 0;
+  const avgPace = getDisplayAvgPace();
   document.getElementById("track-pace-avg").textContent = fmtPace(avgPace);
+
+  const hasRepBlocks = !!(activeSession && activeSession.steps && activeSession.steps.some((s) => s.type === "repetitions"));
+  if (hasRepBlocks) {
+    const repPace = tracking.repDistanceM > 0 ? tracking.repElapsedSec / (tracking.repDistanceM / 1000) : null;
+    document.getElementById("track-pace-rep").textContent = repPace != null ? fmtPace(repPace) : "—'—\"";
+  }
 
   // allure "actuelle" affichée à l'écran : sur le dernier segment depuis le
   // dernier split (ou depuis le départ) — distincte de l'allure lissée 10s
@@ -1533,9 +1632,12 @@ function updateTrackUI() {
     if (tracking.uiTicks % 2 === 0) {
       const smoothPace = rollingPaceSecPerKm();
       if (smoothPace != null) {
-        checkPaceAlert(smoothPace);
         tracking.paceHistory.push({ t: Math.round(elapsed), pace: Math.round(smoothPace) });
       }
+    }
+    if (tracking.uiTicks % 5 === 0) {
+      const smoothPace = rollingPaceSecPerKm();
+      if (smoothPace != null) checkPaceAlert(smoothPace);
     }
   }
 
@@ -1581,9 +1683,7 @@ function updateLockReadout() {
   if (!tracking.active) return;
   document.getElementById("lock-dist").innerHTML = fmtKm(tracking.distanceM) + ' <span>km</span>';
   document.getElementById("lock-clock").textContent = fmtClock(Math.floor(currentElapsedSec()));
-  const elapsed = currentElapsedSec();
-  const avgPace = tracking.distanceM > 0 ? elapsed / (tracking.distanceM / 1000) : 0;
-  document.getElementById("lock-pace").textContent = fmtPace(avgPace) + " /km";
+  document.getElementById("lock-pace").textContent = fmtPace(getDisplayAvgPace()) + " /km";
 }
 
 function startUnlockHold() {
@@ -1635,12 +1735,13 @@ function stopRun() {
   releaseWakeLock();
   setScreenLock(false);
   document.getElementById("phase-bar").style.display = "none";
+  document.getElementById("track-pace-rep-cell").style.display = "none";
   phaseSequence = [];
   phaseIndex = -1;
 
   const durationSec = Math.round(currentElapsedSec());
   const distanceM = tracking.distanceM;
-  const avgPaceSecPerKm = distanceM > 0 ? durationSec / (distanceM / 1000) : 0;
+  const avgPaceSecPerKm = getDisplayAvgPace();
   const hasRepetitions = !!(activeSession && activeSession.steps && activeSession.steps.some((s) => s.type === "repetitions"));
 
   const run = {
