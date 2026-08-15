@@ -1918,12 +1918,15 @@ async function syncNow(opts) {
 function updateSyncStatus() {
   const el = document.getElementById("sync-status");
   const textEl = document.getElementById("sync-status-text");
+  const dot = document.getElementById("account-icon-dot");
   if (currentUser) {
-    el.className = "sync-status ok";
-    textEl.textContent = `Synchronisé — ${displayNameFor(currentUser)}`;
+    el.style.display = "none";
+    if (dot) dot.classList.add("ok");
   } else {
     el.className = "sync-status";
+    el.style.display = "flex";
     textEl.textContent = "Non connecté";
+    if (dot) dot.classList.remove("ok");
   }
 }
 
