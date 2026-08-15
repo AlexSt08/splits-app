@@ -1,1 +1,0 @@
-Fichier de test du connecteur GitHub — sera supprimé automatiquement.
