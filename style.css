@@ -89,6 +89,7 @@ button:focus-visible, a:focus-visible {
 .topbar .wordmark b { color: var(--ink); }
 
 .account-icon {
+  position: relative;
   width: 34px; height: 34px;
   border-radius: 50%;
   background: var(--surface);
@@ -97,6 +98,15 @@ button:focus-visible, a:focus-visible {
   color: var(--ink-dim);
   flex-shrink: 0;
 }
+.account-icon-dot {
+  position: absolute;
+  top: -2px; right: -2px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+.account-icon-dot.ok { background: var(--good); }
 
 .sync-status {
   display: flex;
