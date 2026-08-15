@@ -35,6 +35,7 @@
       </div>
     </div>
     <div id="share-map"></div>
+    <div id="share-pace-history" class="pace-history-block" style="display:none; margin-top:20px;"></div>
     <div class="splits-table" id="share-splits" style="margin-top:20px;"></div>
   </div>
   <div id="share-error" class="share-error" style="display:none;">
@@ -69,6 +70,82 @@ function fmtDateFull(iso) {
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
+// ---------- historique d'allure : barres par répétition OU courbe continue
+// (portage de la logique de app.js, absente jusqu'ici de la page de partage) ----------
+function computePhaseAvgPace(phaseLog, finalElapsedSec, finalDistanceM) {
+  const entries = [];
+  for (let i = 0; i < phaseLog.length; i++) {
+    const cur = phaseLog[i];
+    const next = phaseLog[i + 1];
+    const endT = next ? next.t : finalElapsedSec;
+    const endDist = next ? next.distanceM : finalDistanceM;
+    const durSec = Math.max(1, endT - cur.t);
+    const distM = Math.max(0, endDist - cur.distanceM);
+    const avgPaceSecPerKm = distM > 5 ? durSec / (distM / 1000) : null;
+    entries.push({ ...cur, durationSec: durSec, avgPaceSecPerKm });
+  }
+  return entries;
+}
+function renderPaceLineChart(containerId, paceHistory) {
+  const container = document.getElementById(containerId);
+  if (!paceHistory || paceHistory.length < 2) return false;
+  const paces = paceHistory.map((p) => p.pace);
+  const minPace = Math.min(...paces);
+  const maxPace = Math.max(...paces);
+  const range = Math.max(maxPace - minPace, 1);
+  const maxT = Math.max(paceHistory[paceHistory.length - 1].t, 1);
+  const W = 300, H = 90, pad = 4;
+  const points = paceHistory.map((p) => {
+    const x = pad + (p.t / maxT) * (W - 2 * pad);
+    const yNorm = (maxPace - p.pace) / range;
+    const y = pad + (1 - yNorm) * (H - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  container.innerHTML = `
+    <div class="pace-chart-label">Allure dans le temps</div>
+    <div class="pace-chart-range-top"><span>${fmtPace(minPace)}/km</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="pace-chart-svg" preserveAspectRatio="none">
+      <polyline points="${points}" fill="none" stroke="#d6432e" stroke-width="2" vector-effect="non-scaling-stroke" />
+    </svg>
+    <div class="pace-chart-range-bottom"><span>${fmtPace(maxPace)}/km</span></div>
+  `;
+  return true;
+}
+function renderRepsBarChart(containerId, entries) {
+  const container = document.getElementById(containerId);
+  const workEntries = entries.filter((e) => e.kind === "work" && e.avgPaceSecPerKm);
+  if (workEntries.length === 0) return false;
+  const paces = workEntries.map((e) => e.avgPaceSecPerKm);
+  const maxPace = Math.max(...paces);
+  const minPace = Math.min(...paces);
+  const range = Math.max(maxPace - minPace, 1);
+  container.innerHTML = `<div class="pace-chart-label">Allure par répétition</div><div class="trends-bars reps-bars"></div>`;
+  const barsEl = container.querySelector(".reps-bars");
+  workEntries.forEach((e) => {
+    const pct = Math.max(4, 35 + (65 * (maxPace - e.avgPaceSecPerKm)) / range);
+    const bar = document.createElement("div");
+    bar.className = "trend-bar";
+    bar.innerHTML = `
+      <div class="trend-bar-val">${fmtPace(e.avgPaceSecPerKm)}</div>
+      <div class="trend-bar-track"><div class="trend-bar-fill" style="height:${pct}%"></div></div>
+      <div class="trend-bar-label">${e.rep || ""}${e.totalSets > 1 ? ` S${e.set}` : ""}</div>
+    `;
+    barsEl.appendChild(bar);
+  });
+  return true;
+}
+function renderSharePaceHistory(row) {
+  const container = document.getElementById("share-pace-history");
+  let shown = false;
+  if (row.has_repetitions && row.phase_log && row.phase_log.length > 0) {
+    const entries = computePhaseAvgPace(row.phase_log, row.duration_sec, row.distance_m);
+    shown = renderRepsBarChart("share-pace-history", entries);
+  } else if (row.pace_history && row.pace_history.length > 1) {
+    shown = renderPaceLineChart("share-pace-history", row.pace_history);
+  }
+  container.style.display = shown ? "block" : "none";
+}
+
 async function loadSharedRun() {
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id");
@@ -85,6 +162,8 @@ async function loadSharedRun() {
   document.getElementById("share-dist").textContent = `${fmtKm(row.distance_m)} km`;
   document.getElementById("share-duration").textContent = fmtClock(row.duration_sec);
   document.getElementById("share-pace").textContent = `${fmtPace(row.avg_pace_sec_per_km)} /km`;
+
+  renderSharePaceHistory(row);
 
   const path = row.path || [];
   if (path.length > 1) {
