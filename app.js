@@ -944,11 +944,42 @@ function computePhaseAvgPace(phaseLog, finalElapsedSec, finalDistanceM) {
   return entries;
 }
 
-function renderPaceLineChart(containerId, paceHistory) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  if (!paceHistory || paceHistory.length < 2) { container.style.display = "none"; container.innerHTML = ""; return; }
-  container.style.display = "block";
+// Isole, à partir du journal de phases, les échantillons d'allure (pace_history)
+// qui tombent dans chaque bloc "continu" (ex. échauffement, retour au calme).
+function buildContinuSegments(phaseLog, paceHistory, finalElapsedSec) {
+  if (!phaseLog || !phaseLog.length || !paceHistory || !paceHistory.length) return [];
+  const segments = [];
+  for (let i = 0; i < phaseLog.length; i++) {
+    if (phaseLog[i].kind !== "continu") continue;
+    const startT = phaseLog[i].t;
+    const endT = i + 1 < phaseLog.length ? phaseLog[i + 1].t : finalElapsedSec;
+    const samples = paceHistory.filter((p) => p.t >= startT && p.t < endT);
+    if (samples.length > 1) segments.push(samples);
+  }
+  return segments;
+}
+// Recolle plusieurs blocs continus bout à bout sur un axe temporel relatif —
+// ignore l'écart réel entre les blocs (ex. le bloc répétitions entre
+// échauffement et retour au calme) pour éviter un grand vide au milieu.
+// Retourne aussi les positions (en secondes relatives) où placer un
+// séparateur visuel entre deux blocs recollés.
+function concatSegments(segments) {
+  const combined = [];
+  const boundaries = [];
+  let offset = 0;
+  segments.forEach((seg) => {
+    const segStart = seg[0].t;
+    seg.forEach((p) => combined.push({ t: offset + (p.t - segStart), pace: p.pace }));
+    const segDuration = seg[seg.length - 1].t - segStart;
+    offset += segDuration + 1;
+    boundaries.push(offset - 0.5);
+  });
+  boundaries.pop(); // pas de séparateur après le tout dernier bloc
+  return { combined, boundaries };
+}
+
+function renderPaceLineChart(el, paceHistory, boundaries) {
+  if (!paceHistory || paceHistory.length < 2) return false;
   const paces = paceHistory.map((p) => p.pace);
   const minPace = Math.min(...paces);
   const maxPace = Math.max(...paces);
@@ -961,28 +992,31 @@ function renderPaceLineChart(containerId, paceHistory) {
     const y = pad + (1 - yNorm) * (H - 2 * pad);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
-  container.innerHTML = `
+  const separators = (boundaries || []).map((t) => {
+    const x = pad + (t / maxT) * (W - 2 * pad);
+    return `<line x1="${x.toFixed(1)}" y1="${pad}" x2="${x.toFixed(1)}" y2="${H - pad}" stroke="#6d7880" stroke-width="1" stroke-dasharray="3,3" vector-effect="non-scaling-stroke" />`;
+  }).join("");
+  el.innerHTML = `
     <div class="pace-chart-label">Allure dans le temps</div>
     <div class="pace-chart-range-top"><span>${fmtPace(minPace)}/km</span></div>
     <svg viewBox="0 0 ${W} ${H}" class="pace-chart-svg" preserveAspectRatio="none">
+      ${separators}
       <polyline points="${points}" fill="none" stroke="#d6432e" stroke-width="2" vector-effect="non-scaling-stroke" />
     </svg>
     <div class="pace-chart-range-bottom"><span>${fmtPace(maxPace)}/km</span></div>
   `;
+  return true;
 }
 
-function renderRepsBarChart(containerId, entries) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
+function renderRepsBarChart(el, entries) {
   const workEntries = entries.filter((e) => e.kind === "work" && e.avgPaceSecPerKm);
-  if (workEntries.length === 0) { container.style.display = "none"; container.innerHTML = ""; return; }
-  container.style.display = "block";
+  if (workEntries.length === 0) return false;
   const paces = workEntries.map((e) => e.avgPaceSecPerKm);
   const maxPace = Math.max(...paces);
   const minPace = Math.min(...paces);
   const range = Math.max(maxPace - minPace, 1);
-  container.innerHTML = `<div class="pace-chart-label">Allure par répétition</div><div class="trends-bars reps-bars"></div>`;
-  const barsEl = container.querySelector(".reps-bars");
+  el.innerHTML = `<div class="pace-chart-label">Allure par répétition</div><div class="trends-bars reps-bars"></div>`;
+  const barsEl = el.querySelector(".reps-bars");
   workEntries.forEach((e) => {
     const pct = Math.max(4, 35 + (65 * (maxPace - e.avgPaceSecPerKm)) / range);
     const bar = document.createElement("div");
@@ -994,20 +1028,39 @@ function renderRepsBarChart(containerId, entries) {
     `;
     barsEl.appendChild(bar);
   });
+  return true;
 }
 
+// Empile, dans le même bloc : barres par répétition (si présentes) PUIS
+// courbe continue recollée des blocs "continu" (si présents) — les deux
+// peuvent coexister pour une séance programme mixte.
 function renderRunPaceHistory(r) {
-  const containerId = "detail-pace-history";
+  const stack = document.getElementById("detail-pace-history");
+  stack.innerHTML = "";
+  let shown = false;
+
   if (r.hasRepetitions && r.phaseLog && r.phaseLog.length > 0) {
     const entries = computePhaseAvgPace(r.phaseLog, r.durationSec, r.distanceM);
-    renderRepsBarChart(containerId, entries);
+    const repsEl = document.createElement("div");
+    repsEl.className = "pace-history-block";
+    if (renderRepsBarChart(repsEl, entries)) { stack.appendChild(repsEl); shown = true; }
+
+    const segments = buildContinuSegments(r.phaseLog, r.paceHistory, r.durationSec);
+    if (segments.length > 0) {
+      const { combined, boundaries } = concatSegments(segments);
+      const continuEl = document.createElement("div");
+      continuEl.className = "pace-history-block";
+      if (renderPaceLineChart(continuEl, combined, boundaries)) { stack.appendChild(continuEl); shown = true; }
+    }
   } else if (r.paceHistory && r.paceHistory.length > 1) {
-    renderPaceLineChart(containerId, r.paceHistory);
-  } else {
-    const el = document.getElementById(containerId);
-    if (el) { el.style.display = "none"; el.innerHTML = ""; }
+    const el = document.createElement("div");
+    el.className = "pace-history-block";
+    if (renderPaceLineChart(el, r.paceHistory, [])) { stack.appendChild(el); shown = true; }
   }
+
+  stack.classList.toggle("show", shown);
 }
+
 
 // ---------- navigation ----------
 function showScreen(id) {
