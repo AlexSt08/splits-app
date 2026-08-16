@@ -1046,13 +1046,16 @@ button:focus-visible, a:focus-visible {
   margin-top: 2px;
 }
 
-/* historique d'allure : courbe continue OU barres par répétition */
+/* historique d'allure : courbe continue ET/OU barres par répétition,
+   empilées dans .pace-history-stack quand une séance programme mixte
+   contient les deux (répétitions + blocs continus) */
+.pace-history-stack { display: none; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.pace-history-stack.show { display: flex; }
 .pace-history-block {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 10px 12px 8px;
-  margin-bottom: 10px;
 }
 .pace-chart-label {
   font-family: var(--mono);
