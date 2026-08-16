@@ -35,7 +35,7 @@
       </div>
     </div>
     <div id="share-map"></div>
-    <div id="share-pace-history" class="pace-history-block" style="display:none; margin-top:20px;"></div>
+    <div id="share-pace-history" class="pace-history-stack" style="margin-top:20px;"></div>
     <div class="splits-table" id="share-splits" style="margin-top:20px;"></div>
   </div>
   <div id="share-error" class="share-error" style="display:none;">
@@ -70,8 +70,8 @@ function fmtDateFull(iso) {
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-// ---------- historique d'allure : barres par répétition OU courbe continue
-// (portage de la logique de app.js, absente jusqu'ici de la page de partage) ----------
+// ---------- historique d'allure : barres par répétition ET/OU courbe continue
+// recollée (portage de la logique de app.js, empilées quand les deux existent) ----------
 function computePhaseAvgPace(phaseLog, finalElapsedSec, finalDistanceM) {
   const entries = [];
   for (let i = 0; i < phaseLog.length; i++) {
@@ -86,8 +86,33 @@ function computePhaseAvgPace(phaseLog, finalElapsedSec, finalDistanceM) {
   }
   return entries;
 }
-function renderPaceLineChart(containerId, paceHistory) {
-  const container = document.getElementById(containerId);
+function buildContinuSegments(phaseLog, paceHistory, finalElapsedSec) {
+  if (!phaseLog || !phaseLog.length || !paceHistory || !paceHistory.length) return [];
+  const segments = [];
+  for (let i = 0; i < phaseLog.length; i++) {
+    if (phaseLog[i].kind !== "continu") continue;
+    const startT = phaseLog[i].t;
+    const endT = i + 1 < phaseLog.length ? phaseLog[i + 1].t : finalElapsedSec;
+    const samples = paceHistory.filter((p) => p.t >= startT && p.t < endT);
+    if (samples.length > 1) segments.push(samples);
+  }
+  return segments;
+}
+function concatSegments(segments) {
+  const combined = [];
+  const boundaries = [];
+  let offset = 0;
+  segments.forEach((seg) => {
+    const segStart = seg[0].t;
+    seg.forEach((p) => combined.push({ t: offset + (p.t - segStart), pace: p.pace }));
+    const segDuration = seg[seg.length - 1].t - segStart;
+    offset += segDuration + 1;
+    boundaries.push(offset - 0.5);
+  });
+  boundaries.pop();
+  return { combined, boundaries };
+}
+function renderPaceLineChart(el, paceHistory, boundaries) {
   if (!paceHistory || paceHistory.length < 2) return false;
   const paces = paceHistory.map((p) => p.pace);
   const minPace = Math.min(...paces);
@@ -101,26 +126,30 @@ function renderPaceLineChart(containerId, paceHistory) {
     const y = pad + (1 - yNorm) * (H - 2 * pad);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
-  container.innerHTML = `
+  const separators = (boundaries || []).map((t) => {
+    const x = pad + (t / maxT) * (W - 2 * pad);
+    return `<line x1="${x.toFixed(1)}" y1="${pad}" x2="${x.toFixed(1)}" y2="${H - pad}" stroke="#6d7880" stroke-width="1" stroke-dasharray="3,3" vector-effect="non-scaling-stroke" />`;
+  }).join("");
+  el.innerHTML = `
     <div class="pace-chart-label">Allure dans le temps</div>
     <div class="pace-chart-range-top"><span>${fmtPace(minPace)}/km</span></div>
     <svg viewBox="0 0 ${W} ${H}" class="pace-chart-svg" preserveAspectRatio="none">
+      ${separators}
       <polyline points="${points}" fill="none" stroke="#d6432e" stroke-width="2" vector-effect="non-scaling-stroke" />
     </svg>
     <div class="pace-chart-range-bottom"><span>${fmtPace(maxPace)}/km</span></div>
   `;
   return true;
 }
-function renderRepsBarChart(containerId, entries) {
-  const container = document.getElementById(containerId);
+function renderRepsBarChart(el, entries) {
   const workEntries = entries.filter((e) => e.kind === "work" && e.avgPaceSecPerKm);
   if (workEntries.length === 0) return false;
   const paces = workEntries.map((e) => e.avgPaceSecPerKm);
   const maxPace = Math.max(...paces);
   const minPace = Math.min(...paces);
   const range = Math.max(maxPace - minPace, 1);
-  container.innerHTML = `<div class="pace-chart-label">Allure par répétition</div><div class="trends-bars reps-bars"></div>`;
-  const barsEl = container.querySelector(".reps-bars");
+  el.innerHTML = `<div class="pace-chart-label">Allure par répétition</div><div class="trends-bars reps-bars"></div>`;
+  const barsEl = el.querySelector(".reps-bars");
   workEntries.forEach((e) => {
     const pct = Math.max(4, 35 + (65 * (maxPace - e.avgPaceSecPerKm)) / range);
     const bar = document.createElement("div");
@@ -135,15 +164,30 @@ function renderRepsBarChart(containerId, entries) {
   return true;
 }
 function renderSharePaceHistory(row) {
-  const container = document.getElementById("share-pace-history");
+  const stack = document.getElementById("share-pace-history");
+  stack.innerHTML = "";
   let shown = false;
+
   if (row.has_repetitions && row.phase_log && row.phase_log.length > 0) {
     const entries = computePhaseAvgPace(row.phase_log, row.duration_sec, row.distance_m);
-    shown = renderRepsBarChart("share-pace-history", entries);
+    const repsEl = document.createElement("div");
+    repsEl.className = "pace-history-block";
+    if (renderRepsBarChart(repsEl, entries)) { stack.appendChild(repsEl); shown = true; }
+
+    const segments = buildContinuSegments(row.phase_log, row.pace_history, row.duration_sec);
+    if (segments.length > 0) {
+      const { combined, boundaries } = concatSegments(segments);
+      const continuEl = document.createElement("div");
+      continuEl.className = "pace-history-block";
+      if (renderPaceLineChart(continuEl, combined, boundaries)) { stack.appendChild(continuEl); shown = true; }
+    }
   } else if (row.pace_history && row.pace_history.length > 1) {
-    shown = renderPaceLineChart("share-pace-history", row.pace_history);
+    const el = document.createElement("div");
+    el.className = "pace-history-block";
+    if (renderPaceLineChart(el, row.pace_history, [])) { stack.appendChild(el); shown = true; }
   }
-  container.style.display = shown ? "block" : "none";
+
+  stack.classList.toggle("show", shown);
 }
 
 async function loadSharedRun() {
