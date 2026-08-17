@@ -1,4 +1,4 @@
-const CACHE = "splits-v8";
+const CACHE = "splits-v9";
 const CORE_ASSETS = [
   "./",
   "./index.html",
