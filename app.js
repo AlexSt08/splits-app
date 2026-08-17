@@ -978,15 +978,36 @@ function concatSegments(segments) {
   return { combined, boundaries };
 }
 
+// Filtre robuste anti-bruit GPS : élimine les échantillons trop éloignés de
+// la médiane (méthode MAD — Median Absolute Deviation), plutôt qu'un seuil
+// fixe, pour s'adapter à n'importe quelle allure cible (EF lente ou tempo
+// rapide). Les sauts de signal GPS produisent des pics d'allure irréalistes
+// (ex. 4'57 ou 107 min/km sur une même course EF à ~7-8 min/km) qui
+// faussaient le range affiché et l'échelle de la courbe.
+function filterPaceOutliers(samples) {
+  if (samples.length < 5) return samples;
+  const sortedPaces = samples.map((s) => s.pace).sort((a, b) => a - b);
+  const mid = Math.floor(sortedPaces.length / 2);
+  const median = sortedPaces.length % 2 ? sortedPaces[mid] : (sortedPaces[mid - 1] + sortedPaces[mid]) / 2;
+  const deviations = sortedPaces.map((p) => Math.abs(p - median)).sort((a, b) => a - b);
+  const madMid = Math.floor(deviations.length / 2);
+  const mad = deviations.length % 2 ? deviations[madMid] : (deviations[madMid - 1] + deviations[madMid]) / 2;
+  const scaledMad = mad * 1.4826 || median * 0.1 || 1; // équivalent écart-type ; garde-fou si MAD=0
+  const threshold = Math.max(scaledMad * 2.5, median * 0.25); // tolère au moins ±25% du médian
+  return samples.filter((s) => Math.abs(s.pace - median) <= threshold);
+}
+
 function renderPaceLineChart(el, paceHistory, boundaries) {
   if (!paceHistory || paceHistory.length < 2) return false;
-  const paces = paceHistory.map((p) => p.pace);
+  const maxT = Math.max(paceHistory[paceHistory.length - 1].t, 1); // échelle temporelle sur les données brutes, avant filtrage
+  const filtered = filterPaceOutliers(paceHistory);
+  if (filtered.length < 2) return false;
+  const paces = filtered.map((p) => p.pace);
   const minPace = Math.min(...paces);
   const maxPace = Math.max(...paces);
   const range = Math.max(maxPace - minPace, 1);
-  const maxT = Math.max(paceHistory[paceHistory.length - 1].t, 1);
   const W = 300, H = 90, pad = 4;
-  const points = paceHistory.map((p) => {
+  const points = filtered.map((p) => {
     const x = pad + (p.t / maxT) * (W - 2 * pad);
     const yNorm = (maxPace - p.pace) / range; // plus rapide (allure basse) => plus haut
     const y = pad + (1 - yNorm) * (H - 2 * pad);
