@@ -162,6 +162,26 @@ let activeSession = null;   // séance du programme sélectionnée pour la proch
 let editingSessionId = null; // séance en cours d'édition sur l'écran Programme
 let editingSteps = null;     // copie de travail des étapes pendant l'édition
 let collapsedWeeks = null;   // Set d'index de semaines repliées (null = pas encore initialisé)
+const SETTINGS_KEY = "splits.settings.v1";
+const DEFAULT_SETTINGS = {
+  paceCheckContinuSec: 5,   // fréquence du contrôle d'allure vocal, bloc continu
+  paceCheckWorkSec: 5,      // fréquence du contrôle d'allure vocal, bloc répétitions
+  timeAlertContinuSec: 600, // intervalle des annonces "X minutes restantes" (continu), hors les 5 dernières minutes (fixe, toutes les minutes)
+  timeAlertWorkSec: 10,     // intervalle des annonces "X secondes" (travail/récup)
+};
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+  } catch (e) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+let settings = loadSettings();
+
 let currentUser = null;
 let syncing = false;
 
@@ -850,14 +870,18 @@ function updatePhaseUI() {
 }
 
 // Décomptes vocaux pendant une phase en cours (pas au changement de phase,
-// déjà annoncé par advancePhase) :
-//  - continue (EF, échauffement, retour au calme) : toutes les 10 min, puis
-//    toutes les minutes sur les 5 dernières minutes
-//  - travail / récupération (intra ou extra) : toutes les 10 secondes
+// déjà annoncé par advancePhase). Structure fixe, intervalles réglables
+// dans Compte & réglages :
+//  - continue (EF, échauffement, retour au calme) : toutes les
+//    settings.timeAlertContinuSec, puis toutes les minutes sur les 5
+//    dernières minutes (comportement fixe, non réglable)
+//  - travail / récupération (intra ou extra) : toutes les
+//    settings.timeAlertWorkSec
 function announcePhaseCountdown(phase) {
   const r = phase.remainingSec;
   if (phase.kind === "continu") {
-    if (r > 300 && r % 600 === 0) {
+    const interval = settings.timeAlertContinuSec;
+    if (r > 300 && interval > 0 && r % interval === 0) {
       const mins = Math.round(r / 60);
       speak(`${mins} minutes restantes`);
     } else if (r <= 300 && r % 60 === 0) {
@@ -866,7 +890,7 @@ function announcePhaseCountdown(phase) {
     }
   } else if (phase.kind === "transition") {
     if (r <= 5 && r >= 1) speak(String(r));
-  } else if ((phase.kind === "work" || phase.kind === "rest" || phase.kind === "restSet") && r % 10 === 0) {
+  } else if ((phase.kind === "work" || phase.kind === "rest" || phase.kind === "restSet") && settings.timeAlertWorkSec > 0 && r % settings.timeAlertWorkSec === 0) {
     speak(`${r} secondes`);
   }
 }
@@ -915,8 +939,18 @@ function rollingPaceSecPerKm() {
   return timeSec / (distM / 1000);
 }
 
-// Répète l'alerte toutes les 5 secondes tant que l'allure lissée reste hors
-// de la fourchette cible ; silencieux dès le retour dans la zone.
+// Intervalle (en secondes) du contrôle d'allure vocal — réglable par type de
+// bloc dans Compte & réglages. Hors continu/répétitions (récup, transition,
+// course libre), l'alerte est de toute façon désactivée par getCurrentTargetZone.
+function getPaceCheckIntervalSec() {
+  if (phaseIndex >= 0 && phaseIndex < phaseSequence.length && phaseSequence[phaseIndex].kind === "work") {
+    return settings.paceCheckWorkSec;
+  }
+  return settings.paceCheckContinuSec;
+}
+
+// Répète l'alerte tant que l'allure lissée reste hors de la fourchette
+// cible ; silencieux dès le retour dans la zone.
 function checkPaceAlert(currentPaceSecPerKm) {
   const zone = getCurrentTargetZone();
   if (!zone || !isFinite(currentPaceSecPerKm) || currentPaceSecPerKm <= 0) return;
@@ -1717,7 +1751,8 @@ function updateTrackUI() {
         tracking.paceHistory.push({ t: Math.round(elapsed), pace: Math.round(smoothPace) });
       }
     }
-    if (tracking.uiTicks % 5 === 0) {
+    const paceCheckSec = getPaceCheckIntervalSec();
+    if (paceCheckSec > 0 && tracking.uiTicks % paceCheckSec === 0) {
       const smoothPace = rollingPaceSecPerKm();
       if (smoothPace != null) checkPaceAlert(smoothPace);
     }
@@ -2073,6 +2108,25 @@ document.getElementById("btn-sign-out").addEventListener("click", async () => {
   toast("Déconnecté");
 });
 document.getElementById("btn-sync-now").addEventListener("click", () => syncNow());
+
+// ============================================================
+// RÉGLAGES — fréquence des alertes vocales, par type de bloc
+// ============================================================
+function bindSettingSlider(rangeId, valId, key) {
+  const range = document.getElementById(rangeId);
+  const val = document.getElementById(valId);
+  range.value = settings[key];
+  val.textContent = settings[key] + "s";
+  range.addEventListener("input", () => {
+    settings[key] = Number(range.value);
+    val.textContent = settings[key] + "s";
+    saveSettings();
+  });
+}
+bindSettingSlider("set-pace-continu", "set-pace-continu-val", "paceCheckContinuSec");
+bindSettingSlider("set-pace-work", "set-pace-work-val", "paceCheckWorkSec");
+bindSettingSlider("set-time-continu", "set-time-continu-val", "timeAlertContinuSec");
+bindSettingSlider("set-time-work", "set-time-work-val", "timeAlertWorkSec");
 
 // ============================================================
 // init
