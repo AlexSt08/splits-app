@@ -1065,6 +1065,7 @@ button:focus-visible, a:focus-visible {
   color: var(--ink-faint);
   margin-bottom: 6px;
 }
+.pace-chart-avg { color: var(--gold); text-transform: none; letter-spacing: normal; }
 .pace-chart-svg { width: 100%; height: 80px; display: block; }
 .pace-chart-range-top,
 .pace-chart-range-bottom {
