@@ -340,6 +340,46 @@
       <button id="btn-sync-now" class="ctrl-btn pause" style="width:100%;margin-top:16px;">Synchroniser maintenant</button>
       <button id="btn-sign-out" class="delete-run" style="width:100%;margin-top:22px;">Se déconnecter</button>
     </div>
+
+    <div class="settings-section">
+      <div class="section-head"><h2>Alertes vocales</h2></div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">Bloc continu</div>
+        <div class="settings-row">
+          <span>Contrôle d'allure</span>
+          <div class="settings-row-controls">
+            <input type="range" id="set-pace-continu" min="2" max="15" step="1" />
+            <span class="settings-val" id="set-pace-continu-val">5s</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span>Alerte de temps</span>
+          <div class="settings-row-controls">
+            <input type="range" id="set-time-continu" min="60" max="1200" step="30" />
+            <span class="settings-val" id="set-time-continu-val">600s</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">Bloc répétitions</div>
+        <div class="settings-row">
+          <span>Contrôle d'allure</span>
+          <div class="settings-row-controls">
+            <input type="range" id="set-pace-work" min="2" max="15" step="1" />
+            <span class="settings-val" id="set-pace-work-val">5s</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span>Alerte de temps</span>
+          <div class="settings-row-controls">
+            <input type="range" id="set-time-work" min="5" max="30" step="5" />
+            <span class="settings-val" id="set-time-work-val">10s</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <div class="tabbar">
