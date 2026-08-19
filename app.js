@@ -900,10 +900,15 @@ function rollingPaceSecPerKm() {
   const samples = tracking.recentSamples;
   if (samples.length < 2) return null;
   const now = Date.now();
-  let ref = samples[0];
+  let ref = null;
   for (const s of samples) {
     if (now - s.t <= PACE_SMOOTHING_WINDOW_MS) { ref = s; break; }
   }
+  // Aucun échantillon dans les 10 dernières secondes (arrêt réel, mouvement
+  // sous le seuil de 3 m/tick, ou signal perdu) : pas de repli sur le plus
+  // ancien échantillon disponible, qui pourrait dater de bien plus de 10s et
+  // gonfler artificiellement le temps écoulé sans borne.
+  if (!ref) return null;
   const distM = tracking.distanceM - ref.distanceM;
   const timeSec = (now - ref.t) / 1000;
   if (distM < 5 || timeSec < 2) return null; // pas assez de signal pour une estimation fiable
@@ -1005,23 +1010,26 @@ function renderPaceLineChart(el, paceHistory, boundaries) {
   const paces = filtered.map((p) => p.pace);
   const minPace = Math.min(...paces);
   const maxPace = Math.max(...paces);
+  const avgPace = paces.reduce((a, b) => a + b, 0) / paces.length;
   const range = Math.max(maxPace - minPace, 1);
   const W = 300, H = 90, pad = 4;
-  const points = filtered.map((p) => {
-    const x = pad + (p.t / maxT) * (W - 2 * pad);
-    const yNorm = (maxPace - p.pace) / range; // plus rapide (allure basse) => plus haut
-    const y = pad + (1 - yNorm) * (H - 2 * pad);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
+  const yFor = (pace) => {
+    const yNorm = (maxPace - pace) / range; // plus rapide (allure basse) => plus haut
+    return pad + (1 - yNorm) * (H - 2 * pad);
+  };
+  const points = filtered.map((p) => `${(pad + (p.t / maxT) * (W - 2 * pad)).toFixed(1)},${yFor(p.pace).toFixed(1)}`).join(" ");
   const separators = (boundaries || []).map((t) => {
     const x = pad + (t / maxT) * (W - 2 * pad);
     return `<line x1="${x.toFixed(1)}" y1="${pad}" x2="${x.toFixed(1)}" y2="${H - pad}" stroke="#6d7880" stroke-width="1" stroke-dasharray="3,3" vector-effect="non-scaling-stroke" />`;
   }).join("");
+  const avgY = yFor(avgPace);
+  const avgLine = `<line x1="${pad}" y1="${avgY.toFixed(1)}" x2="${W - pad}" y2="${avgY.toFixed(1)}" stroke="#d9a73b" stroke-width="1" stroke-dasharray="4,3" vector-effect="non-scaling-stroke" />`;
   el.innerHTML = `
-    <div class="pace-chart-label">Allure dans le temps</div>
+    <div class="pace-chart-label">Allure dans le temps <span class="pace-chart-avg">— moy. ${fmtPace(avgPace)}/km</span></div>
     <div class="pace-chart-range-top"><span>${fmtPace(minPace)}/km</span></div>
     <svg viewBox="0 0 ${W} ${H}" class="pace-chart-svg" preserveAspectRatio="none">
       ${separators}
+      ${avgLine}
       <polyline points="${points}" fill="none" stroke="#d6432e" stroke-width="2" vector-effect="non-scaling-stroke" />
     </svg>
     <div class="pace-chart-range-bottom"><span>${fmtPace(maxPace)}/km</span></div>
