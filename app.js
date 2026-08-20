@@ -1036,7 +1036,7 @@ function filterPaceOutliers(samples) {
   return samples.filter((s) => Math.abs(s.pace - median) <= threshold);
 }
 
-function renderPaceLineChart(el, paceHistory, boundaries) {
+function renderPaceLineChart(el, paceHistory, boundaries, avgOverride) {
   if (!paceHistory || paceHistory.length < 2) return false;
   const maxT = Math.max(paceHistory[paceHistory.length - 1].t, 1); // échelle temporelle sur les données brutes, avant filtrage
   const filtered = filterPaceOutliers(paceHistory);
@@ -1044,7 +1044,15 @@ function renderPaceLineChart(el, paceHistory, boundaries) {
   const paces = filtered.map((p) => p.pace);
   const minPace = Math.min(...paces);
   const maxPace = Math.max(...paces);
-  const avgPace = paces.reduce((a, b) => a + b, 0) / paces.length;
+  // Moyenne affichée = celle du résumé (distance/temps réels), pas une
+  // moyenne arithmétique des échantillons instantanés : la moyenne d'une
+  // série d'allures (sec/km) ne correspond pas au vrai ratio distance/temps
+  // dès que l'allure varie (moyenne harmonique ≠ arithmétique) — recalculer
+  // ici produisait un chiffre différent (jusqu'à ~20s d'écart) de celui du
+  // résumé en haut de page pour la même course.
+  const avgPace = avgOverride != null && avgOverride > 0
+    ? avgOverride
+    : paces.reduce((a, b) => a + b, 0) / paces.length;
   const range = Math.max(maxPace - minPace, 1);
   const W = 300, H = 90, pad = 4;
   const yFor = (pace) => {
@@ -1113,12 +1121,12 @@ function renderRunPaceHistory(r) {
       const { combined, boundaries } = concatSegments(segments);
       const continuEl = document.createElement("div");
       continuEl.className = "pace-history-block";
-      if (renderPaceLineChart(continuEl, combined, boundaries)) { stack.appendChild(continuEl); shown = true; }
+      if (renderPaceLineChart(continuEl, combined, boundaries, r.avgPaceSecPerKm)) { stack.appendChild(continuEl); shown = true; }
     }
   } else if (r.paceHistory && r.paceHistory.length > 1) {
     const el = document.createElement("div");
     el.className = "pace-history-block";
-    if (renderPaceLineChart(el, r.paceHistory, [])) { stack.appendChild(el); shown = true; }
+    if (renderPaceLineChart(el, r.paceHistory, [], r.avgPaceSecPerKm)) { stack.appendChild(el); shown = true; }
   }
 
   stack.classList.toggle("show", shown);
