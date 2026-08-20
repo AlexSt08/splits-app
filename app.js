@@ -25,8 +25,11 @@ const EF_ZONE = { min: 425, max: 496 };
 // formulaire d'étape (±0,3 km/h, convertie en secondes/km à la sauvegarde)
 const SPEED_MARGIN_KMH = 0.3;
 
-// fenêtre de lissage pour l'allure surveillée pendant une course active
-const PACE_SMOOTHING_WINDOW_MS = 10000;
+// fenêtre de lissage FIXE pour le calcul indépendant qui alimente le
+// graphique post-course (paceHistory) — jamais affectée par les réglages de
+// fenêtre du contrôle d'allure en direct (voir rollingPaceSecPerKm plus bas).
+// Volontairement plus large que le direct pour un rendu plus lisse (~Fitbit).
+const GRAPH_SMOOTHING_WINDOW_MS = 20000;
 const PREP_COUNTDOWN_SEC = 10;
 const TRANSITION_COUNTDOWN_SEC = 10;
 
@@ -164,10 +167,12 @@ let editingSteps = null;     // copie de travail des étapes pendant l'édition
 let collapsedWeeks = null;   // Set d'index de semaines repliées (null = pas encore initialisé)
 const SETTINGS_KEY = "splits.settings.v1";
 const DEFAULT_SETTINGS = {
-  paceCheckContinuSec: 5,   // fréquence du contrôle d'allure vocal, bloc continu
-  paceCheckWorkSec: 5,      // fréquence du contrôle d'allure vocal, bloc répétitions
-  timeAlertContinuSec: 600, // intervalle des annonces "X minutes restantes" (continu), hors les 5 dernières minutes (fixe, toutes les minutes)
-  timeAlertWorkSec: 10,     // intervalle des annonces "X secondes" (travail/récup)
+  paceCheckContinuSec: 5,     // fréquence du contrôle d'allure vocal, bloc continu
+  paceCheckWorkSec: 5,        // fréquence du contrôle d'allure vocal, bloc répétitions
+  paceWindowContinuSec: 10,   // fenêtre de lissage du contrôle d'allure EN DIRECT, bloc continu
+  paceWindowWorkSec: 10,      // fenêtre de lissage du contrôle d'allure EN DIRECT, bloc répétitions
+  timeAlertContinuSec: 600,   // intervalle des annonces "X minutes restantes" (continu), hors les 5 dernières minutes (fixe, toutes les minutes)
+  timeAlertWorkSec: 10,       // intervalle des annonces "X secondes" (travail/récup)
 };
 function loadSettings() {
   try {
@@ -918,20 +923,23 @@ function getCurrentTargetZone() {
   return null;
 }
 
-// Allure lissée sur les ~10 dernières secondes (à partir des points GPS
-// enregistrés), plutôt que l'allure instantanée point-à-point.
-function rollingPaceSecPerKm() {
+// Allure lissée sur une fenêtre donnée (en ms), à partir des points GPS
+// enregistrés, plutôt que l'allure instantanée point-à-point. La fenêtre est
+// un paramètre : le contrôle d'allure en direct et le graphique post-course
+// utilisent chacun leur propre fenêtre, totalement indépendantes l'une de
+// l'autre (voir getPaceWindowMs / GRAPH_SMOOTHING_WINDOW_MS).
+function rollingPaceSecPerKm(windowMs) {
   const samples = tracking.recentSamples;
   if (samples.length < 2) return null;
   const now = Date.now();
   let ref = null;
   for (const s of samples) {
-    if (now - s.t <= PACE_SMOOTHING_WINDOW_MS) { ref = s; break; }
+    if (now - s.t <= windowMs) { ref = s; break; }
   }
-  // Aucun échantillon dans les 10 dernières secondes (arrêt réel, mouvement
-  // sous le seuil de 3 m/tick, ou signal perdu) : pas de repli sur le plus
-  // ancien échantillon disponible, qui pourrait dater de bien plus de 10s et
-  // gonfler artificiellement le temps écoulé sans borne.
+  // Aucun échantillon dans la fenêtre (arrêt réel, mouvement sous le seuil
+  // de 3 m/tick, ou signal perdu) : pas de repli sur le plus ancien
+  // échantillon disponible, qui pourrait dater de bien plus que la fenêtre
+  // et gonfler artificiellement le temps écoulé sans borne.
   if (!ref) return null;
   const distM = tracking.distanceM - ref.distanceM;
   const timeSec = (now - ref.t) / 1000;
@@ -947,6 +955,23 @@ function getPaceCheckIntervalSec() {
     return settings.paceCheckWorkSec;
   }
   return settings.paceCheckContinuSec;
+}
+
+// Fenêtre de lissage (en ms) du contrôle d'allure EN DIRECT — réglable par
+// type de bloc. N'a aucune incidence sur le graphique post-course, qui
+// utilise sa propre fenêtre fixe (GRAPH_SMOOTHING_WINDOW_MS).
+function getPaceWindowMs() {
+  if (phaseIndex >= 0 && phaseIndex < phaseSequence.length && phaseSequence[phaseIndex].kind === "work") {
+    return settings.paceWindowWorkSec * 1000;
+  }
+  return settings.paceWindowContinuSec * 1000;
+}
+
+// Taille du tampon de points GPS récents à conserver — doit couvrir la plus
+// large des fenêtres actives (direct réglable + graphique fixe), sans quoi
+// le calcul le plus long manquerait de données.
+function getRecentSamplesRetentionMs() {
+  return Math.max(settings.paceWindowContinuSec, settings.paceWindowWorkSec, GRAPH_SMOOTHING_WINDOW_MS / 1000) * 1000 + 5000;
 }
 
 // Répète l'alerte tant que l'allure lissée reste hors de la fourchette
@@ -1036,6 +1061,49 @@ function filterPaceOutliers(samples) {
   return samples.filter((s) => Math.abs(s.pace - median) <= threshold);
 }
 
+// Réduit le nombre de points affichés en moyennant l'allure par intervalle
+// de temps régulier — lisse mécaniquement le bruit résiduel et allège le
+// tracé avant de générer la courbe.
+function resamplePaceSeries(samples, maxPoints) {
+  if (samples.length <= maxPoints) return samples;
+  const minT = samples[0].t;
+  const maxT = samples[samples.length - 1].t;
+  const span = Math.max(maxT - minT, 1);
+  const buckets = Array.from({ length: maxPoints }, () => []);
+  samples.forEach((p) => {
+    const idx = Math.min(maxPoints - 1, Math.floor(((p.t - minT) / span) * maxPoints));
+    buckets[idx].push(p);
+  });
+  return buckets
+    .filter((b) => b.length > 0)
+    .map((b) => ({
+      t: b.reduce((a, p) => a + p.t, 0) / b.length,
+      pace: b.reduce((a, p) => a + p.pace, 0) / b.length,
+    }));
+}
+
+// Convertit une liste de points {x, y} en un chemin SVG lissé (Catmull-Rom
+// converti en courbes de Bézier cubiques) — donne le rendu arrondi "façon
+// Fitbit" plutôt que des segments droits point à point.
+function smoothSvgPath(points) {
+  if (points.length < 3) {
+    return points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  }
+  let d = `M${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
 function renderPaceLineChart(el, paceHistory, boundaries, avgOverride) {
   if (!paceHistory || paceHistory.length < 2) return false;
   const maxT = Math.max(paceHistory[paceHistory.length - 1].t, 1); // échelle temporelle sur les données brutes, avant filtrage
@@ -1059,7 +1127,12 @@ function renderPaceLineChart(el, paceHistory, boundaries, avgOverride) {
     const yNorm = (maxPace - pace) / range; // plus rapide (allure basse) => plus haut
     return pad + (1 - yNorm) * (H - 2 * pad);
   };
-  const points = filtered.map((p) => `${(pad + (p.t / maxT) * (W - 2 * pad)).toFixed(1)},${yFor(p.pace).toFixed(1)}`).join(" ");
+  const resampled = resamplePaceSeries(filtered, 40);
+  const curvePoints = resampled.map((p) => ({
+    x: pad + (p.t / maxT) * (W - 2 * pad),
+    y: yFor(p.pace),
+  }));
+  const pathD = smoothSvgPath(curvePoints);
   const separators = (boundaries || []).map((t) => {
     const x = pad + (t / maxT) * (W - 2 * pad);
     return `<line x1="${x.toFixed(1)}" y1="${pad}" x2="${x.toFixed(1)}" y2="${H - pad}" stroke="#6d7880" stroke-width="1" stroke-dasharray="3,3" vector-effect="non-scaling-stroke" />`;
@@ -1072,7 +1145,7 @@ function renderPaceLineChart(el, paceHistory, boundaries, avgOverride) {
     <svg viewBox="0 0 ${W} ${H}" class="pace-chart-svg" preserveAspectRatio="none">
       ${separators}
       ${avgLine}
-      <polyline points="${points}" fill="none" stroke="#d6432e" stroke-width="2" vector-effect="non-scaling-stroke" />
+      <path d="${pathD}" fill="none" stroke="#d6432e" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke" />
     </svg>
     <div class="pace-chart-range-bottom"><span>${fmtPace(maxPace)}/km</span></div>
   `;
@@ -1391,19 +1464,37 @@ function openDetail(id) {
   document.getElementById("track-edit-bar").style.display = "none";
   document.getElementById("track-fix-actions").style.display = "flex";
 
-  setTimeout(() => {
-    const mapEl = document.getElementById("detail-map");
+  // ---------- bottom sheet du tracé GPS : carte créée uniquement à l'ouverture ----------
+  function openMapSheet() {
+    document.getElementById("map-sheet-backdrop").classList.add("show");
+    document.getElementById("map-sheet").classList.add("show");
+    setTimeout(() => {
+      const mapEl = document.getElementById("detail-map");
+      if (detailMap) { detailMap.remove(); detailMap = null; detailLine = null; }
+      if (r.path && r.path.length > 1) {
+        detailMap = L.map(mapEl, { zoomControl: false, attributionControl: false }).setView([r.path[0].lat, r.path[0].lng], 15);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(detailMap);
+        const latlngs = r.path.map((p) => [p.lat, p.lng]);
+        detailLine = L.polyline(latlngs, { color: "#d6432e", weight: 4 }).addTo(detailMap);
+        detailMap.fitBounds(detailLine.getBounds(), { padding: [16, 16] });
+      } else {
+        mapEl.innerHTML = `<div class="empty-state" style="border:none;">Pas de tracé GPS pour cette course.</div>`;
+      }
+      if (detailMap) detailMap.invalidateSize();
+    }, 260); // laisse l'animation du bottom sheet se terminer avant d'initialiser Leaflet
+  }
+  function closeMapSheet() {
+    document.getElementById("map-sheet-backdrop").classList.remove("show");
+    document.getElementById("map-sheet").classList.remove("show");
+    editingPath = null;
+    clearEditMarkers();
+    document.getElementById("track-edit-bar").style.display = "none";
+    document.getElementById("track-fix-actions").style.display = "flex";
     if (detailMap) { detailMap.remove(); detailMap = null; detailLine = null; }
-    if (r.path && r.path.length > 1) {
-      detailMap = L.map(mapEl, { zoomControl: false, attributionControl: false }).setView([r.path[0].lat, r.path[0].lng], 15);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(detailMap);
-      const latlngs = r.path.map((p) => [p.lat, p.lng]);
-      detailLine = L.polyline(latlngs, { color: "#d6432e", weight: 4 }).addTo(detailMap);
-      detailMap.fitBounds(detailLine.getBounds(), { padding: [16, 16] });
-    } else {
-      mapEl.innerHTML = `<div class="empty-state" style="border:none;">Pas de tracé GPS pour cette course.</div>`;
-    }
-  }, 50);
+  }
+  document.getElementById("btn-open-map").onclick = openMapSheet;
+  document.getElementById("btn-close-map").onclick = closeMapSheet;
+  document.getElementById("map-sheet-backdrop").onclick = closeMapSheet;
 
   // ---------- correction du tracé (édition sur carte + import KML) ----------
   // Note : distance, allure moyenne ET splits sont recalculés (splits uniformes,
@@ -1687,7 +1778,7 @@ function onPosition(pos) {
 
       const now = Date.now();
       tracking.recentSamples.push({ t: now, distanceM: tracking.distanceM });
-      tracking.recentSamples = tracking.recentSamples.filter((s) => now - s.t <= PACE_SMOOTHING_WINDOW_MS + 5000);
+      tracking.recentSamples = tracking.recentSamples.filter((s) => now - s.t <= getRecentSamplesRetentionMs());
     }
   } else if (tracking.path.length === 0) {
     tracking.path.push(point);
@@ -1754,15 +1845,17 @@ function updateTrackUI() {
     tickPhase();
     tracking.uiTicks = (tracking.uiTicks || 0) + 1;
     if (tracking.uiTicks % 2 === 0) {
-      const smoothPace = rollingPaceSecPerKm();
-      if (smoothPace != null) {
-        tracking.paceHistory.push({ t: Math.round(elapsed), pace: Math.round(smoothPace) });
+      // Fenêtre fixe et indépendante du réglage "direct" — le graphique
+      // post-course ne doit jamais varier selon ce réglage.
+      const graphPace = rollingPaceSecPerKm(GRAPH_SMOOTHING_WINDOW_MS);
+      if (graphPace != null) {
+        tracking.paceHistory.push({ t: Math.round(elapsed), pace: Math.round(graphPace) });
       }
     }
     const paceCheckSec = getPaceCheckIntervalSec();
     if (paceCheckSec > 0 && tracking.uiTicks % paceCheckSec === 0) {
-      const smoothPace = rollingPaceSecPerKm();
-      if (smoothPace != null) checkPaceAlert(smoothPace);
+      const livePace = rollingPaceSecPerKm(getPaceWindowMs());
+      if (livePace != null) checkPaceAlert(livePace);
     }
   }
 
@@ -2133,6 +2226,8 @@ function bindSettingSlider(rangeId, valId, key) {
 }
 bindSettingSlider("set-pace-continu", "set-pace-continu-val", "paceCheckContinuSec");
 bindSettingSlider("set-pace-work", "set-pace-work-val", "paceCheckWorkSec");
+bindSettingSlider("set-window-continu", "set-window-continu-val", "paceWindowContinuSec");
+bindSettingSlider("set-window-work", "set-window-work-val", "paceWindowWorkSec");
 bindSettingSlider("set-time-continu", "set-time-continu-val", "timeAlertContinuSec");
 bindSettingSlider("set-time-work", "set-time-work-val", "timeAlertWorkSec");
 
