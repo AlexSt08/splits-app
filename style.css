@@ -985,10 +985,87 @@ button:focus-visible, a:focus-visible {
 
 #detail-map {
   width: 100%;
-  height: 160px;
+  height: 220px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* bouton compact ouvrant le tracé GPS en bottom sheet — remplace la carte
+   permanente pour laisser la priorité aux données sur cet écran */
+.map-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  flex-shrink: 0;
+  color: var(--ink);
+  width: 100%;
+}
+.map-trigger svg { flex-shrink: 0; color: var(--ink-dim); }
+.map-trigger span:first-of-type { flex: 1; text-align: left; font-size: 13.5px; font-weight: 600; }
+.map-trigger-arrow { color: var(--accent); font-size: 12px; font-weight: 600; flex-shrink: 0; }
+
+/* bottom sheet : tracé GPS + outils de correction, ouvert à la demande */
+.bottom-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 13, 15, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease;
+  z-index: 150;
+}
+.bottom-sheet-backdrop.show { opacity: 1; pointer-events: auto; }
+.bottom-sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom));
+  max-height: 82vh;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.32,.72,0,1);
+  z-index: 151;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bottom-sheet.show { transform: translateY(0); }
+.bottom-sheet-handle {
+  width: 36px; height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  margin: 4px auto 0;
+  flex-shrink: 0;
+}
+.bottom-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.bottom-sheet-close {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
   flex-shrink: 0;
 }
 
@@ -1033,11 +1110,30 @@ button:focus-visible, a:focus-visible {
   text-align: center;
 }
 
+/* "Allure" (barres/courbe) : zone flexible prioritaire, défile en interne
+   si une séance très chargée en répétitions dépasse l'espace disponible —
+   jamais la page entière (cf. #screen-detail overflow-y:hidden) */
+.detail-analysis-block {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 140px;
+  min-height: 0;
+}
+.detail-analysis-block .pace-history-stack {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+/* "Splits par km" : bloc distinct, hauteur plafonnée avec son propre défilement
+   interne indépendant de celui d'"Allure" */
 .detail-splits-block {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  flex-shrink: 0;
+  max-height: 30vh;
 }
 .splits-table-wrap {
   flex: 1;
@@ -1049,13 +1145,14 @@ button:focus-visible, a:focus-visible {
 /* historique d'allure : courbe continue ET/OU barres par répétition,
    empilées dans .pace-history-stack quand une séance programme mixte
    contient les deux (répétitions + blocs continus) */
-.pace-history-stack { display: none; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.pace-history-stack { display: none; flex-direction: column; gap: 10px; }
 .pace-history-stack.show { display: flex; }
 .pace-history-block {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 10px 12px 8px;
+  flex-shrink: 0;
 }
 .pace-chart-label {
   font-family: var(--mono);
