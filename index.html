@@ -269,23 +269,20 @@
       </div>
     </div>
 
-    <div id="detail-map"></div>
+    <button class="map-trigger" id="btn-open-map">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+      <span>Voir le tracé GPS</span>
+      <span class="map-trigger-arrow">→</span>
+    </button>
 
-    <div class="track-edit-bar" id="track-edit-bar" style="display:none;">
-      <span id="track-edit-count">0 points</span>
-      <button id="btn-finish-edit">Terminer</button>
-    </div>
-
-    <div class="track-fix-actions" id="track-fix-actions">
-      <button class="fix-btn" id="btn-edit-track">Corriger le tracé</button>
-      <button class="fix-btn" id="btn-import-track">Importer un KML</button>
-      <input type="file" id="import-kml-input" accept=".kml" style="display:none;" />
+    <div class="detail-analysis-block">
+      <div class="section-head"><h2>Allure</h2></div>
+      <div id="detail-pace-history" class="pace-history-stack"></div>
     </div>
 
     <div class="detail-splits-block">
       <div class="section-head"><h2>Splits par km</h2></div>
       <div class="splits-table-wrap" id="detail-splits-wrap">
-        <div id="detail-pace-history" class="pace-history-stack"></div>
         <div class="splits-table" id="detail-splits"></div>
       </div>
     </div>
@@ -305,6 +302,26 @@
 
     <button class="delete-run" id="btn-delete-run">Supprimer cette course</button>
   </section>
+
+  <!-- ============ TRACÉ GPS (bottom sheet) ============ -->
+  <div id="map-sheet-backdrop" class="bottom-sheet-backdrop"></div>
+  <div id="map-sheet" class="bottom-sheet">
+    <div class="bottom-sheet-handle"></div>
+    <div class="bottom-sheet-header">
+      <span>Tracé GPS</span>
+      <button id="btn-close-map" class="bottom-sheet-close" aria-label="Fermer">✕</button>
+    </div>
+    <div id="detail-map"></div>
+    <div class="track-edit-bar" id="track-edit-bar" style="display:none;">
+      <span id="track-edit-count">0 points</span>
+      <button id="btn-finish-edit">Terminer</button>
+    </div>
+    <div class="track-fix-actions" id="track-fix-actions">
+      <button class="fix-btn" id="btn-edit-track">Corriger le tracé</button>
+      <button class="fix-btn" id="btn-import-track">Importer un KML</button>
+      <input type="file" id="import-kml-input" accept=".kml" style="display:none;" />
+    </div>
+  </div>
 
   <!-- ============ ACCOUNT ============ -->
   <section id="screen-account" class="screen">
@@ -354,6 +371,13 @@
           </div>
         </div>
         <div class="settings-row">
+          <span>Fenêtre de lissage (direct)</span>
+          <div class="settings-row-controls">
+            <input type="range" id="set-window-continu" min="3" max="20" step="1" />
+            <span class="settings-val" id="set-window-continu-val">10s</span>
+          </div>
+        </div>
+        <div class="settings-row">
           <span>Alerte de temps</span>
           <div class="settings-row-controls">
             <input type="range" id="set-time-continu" min="60" max="1200" step="30" />
@@ -369,6 +393,13 @@
           <div class="settings-row-controls">
             <input type="range" id="set-pace-work" min="2" max="15" step="1" />
             <span class="settings-val" id="set-pace-work-val">5s</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span>Fenêtre de lissage (direct)</span>
+          <div class="settings-row-controls">
+            <input type="range" id="set-window-work" min="3" max="20" step="1" />
+            <span class="settings-val" id="set-window-work-val">10s</span>
           </div>
         </div>
         <div class="settings-row">
