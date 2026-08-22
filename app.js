@@ -56,8 +56,14 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // ============================================================
 const GOOGLE_HEALTH_CLIENT_ID = "507298607006-icoje3e3fk4upb301sqmmj319mhkkbmj.apps.googleusercontent.com";
 const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+// Valeur fixe et canonique, indépendante de l'URL exacte utilisée pour
+// accéder à la page (avec ou sans "index.html", avec ou sans slash final).
+// Google exige une correspondance EXACTE avec l'URI enregistrée dans Google
+// Cloud Console — une valeur calculée dynamiquement à partir de
+// window.location.pathname provoquait une erreur "redirect_uri_mismatch"
+// selon la façon dont l'app avait été ouverte.
 function googleHealthRedirectUri() {
-  return window.location.origin + window.location.pathname;
+  return "https://alexst08.github.io/splits-app/";
 }
 function buildGoogleHealthAuthUrl() {
   const params = new URLSearchParams({
