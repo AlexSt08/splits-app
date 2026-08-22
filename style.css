@@ -1312,6 +1312,22 @@ button:focus-visible, a:focus-visible {
   flex-shrink: 0;
 }
 
+/* connexion Google Health (Fitbit) */
+.gh-connect-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.gh-connect-text { flex: 1; min-width: 0; }
+.gh-connect-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.gh-connect-status { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+.gh-connect-status.ok { color: var(--good); }
+#btn-gh-connect, #btn-gh-disconnect { flex-shrink: 0; padding: 8px 14px; }
+
 /* nav */
 .tabbar {
   display: flex;
