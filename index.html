@@ -267,6 +267,10 @@
         <div class="label">Allure moy.</div>
         <div class="value" id="detail-pace">—</div>
       </div>
+      <div class="cell" id="detail-hr-cell" style="display:none; grid-column: 1 / -1;">
+        <div class="label">FC moyenne</div>
+        <div class="value" id="detail-hr">—</div>
+      </div>
     </div>
 
     <button class="map-trigger" id="btn-open-map">
@@ -409,6 +413,18 @@
             <span class="settings-val" id="set-time-work-val">10s</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="section-head"><h2>Fréquence cardiaque</h2></div>
+      <div class="gh-connect-row">
+        <div class="gh-connect-text">
+          <div class="gh-connect-title">Google Health (Fitbit)</div>
+          <div class="gh-connect-status" id="gh-status">Non connecté</div>
+        </div>
+        <button id="btn-gh-connect" class="fix-btn">Connecter</button>
+        <button id="btn-gh-disconnect" class="fix-btn" style="display:none;">Déconnecter</button>
       </div>
     </div>
   </section>
