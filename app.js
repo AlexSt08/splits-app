@@ -50,6 +50,28 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ============================================================
+// GOOGLE HEALTH (Fitbit) — fréquence cardiaque
+// Le Client ID n'est PAS un secret (contrairement au Client Secret, qui
+// reste exclusivement dans l'Edge Function Supabase "google-health").
+// ============================================================
+const GOOGLE_HEALTH_CLIENT_ID = "507298607006-icoje3e3fk4upb301sqmmj319mhkkbmj.apps.googleusercontent.com";
+const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+function googleHealthRedirectUri() {
+  return window.location.origin + window.location.pathname;
+}
+function buildGoogleHealthAuthUrl() {
+  const params = new URLSearchParams({
+    client_id: GOOGLE_HEALTH_CLIENT_ID,
+    redirect_uri: googleHealthRedirectUri(),
+    response_type: "code",
+    access_type: "offline",
+    scope: GOOGLE_HEALTH_SCOPE,
+    prompt: "consent",
+  });
+  return "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString();
+}
+
+// ============================================================
 // PROGRAMME D'ENTRAÎNEMENT — Bloc 1 (VMA 12,1 km/h)
 // Chaque séance = liste d'étapes ordonnées. Deux types d'étape :
 //  - "continu"      : { label, durationSec, paceMinSec, paceMaxSec }
@@ -1316,6 +1338,7 @@ document.getElementById("btn-account").addEventListener("click", () => {
   if (tracking.active) return;
   showScreen("screen-account");
   updateAccountUI();
+  updateGoogleHealthStatus();
 });
 document.getElementById("btn-back-from-account").addEventListener("click", () => {
   showScreen("screen-home");
@@ -1435,6 +1458,7 @@ function openDetail(id) {
   document.getElementById("detail-pace").textContent = `${fmtPace(r.avgPaceSecPerKm)} /km`;
 
   renderRunPaceHistory(r);
+  tryShowRunHeartRate(r);
 
   const splitsEl = document.getElementById("detail-splits");
   splitsEl.innerHTML = "";
@@ -2211,6 +2235,92 @@ document.getElementById("btn-sign-out").addEventListener("click", async () => {
 document.getElementById("btn-sync-now").addEventListener("click", () => syncNow());
 
 // ============================================================
+// GOOGLE HEALTH (Fitbit) — connexion, statut, lecture fréquence cardiaque
+// ============================================================
+async function callGoogleHealth(action, extra) {
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) return { error: "not_logged_in" };
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/google-health`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+    },
+    body: JSON.stringify({ action, ...extra }),
+  });
+  return res.json().catch(() => ({ error: "bad_response" }));
+}
+
+async function updateGoogleHealthStatus() {
+  const statusEl = document.getElementById("gh-status");
+  const connectBtn = document.getElementById("btn-gh-connect");
+  const disconnectBtn = document.getElementById("btn-gh-disconnect");
+  if (!currentUser) {
+    statusEl.textContent = "Connecte-toi d'abord à ton compte Splits";
+    statusEl.classList.remove("ok");
+    connectBtn.style.display = "none";
+    disconnectBtn.style.display = "none";
+    return;
+  }
+  const result = await callGoogleHealth("status");
+  const connected = !!result.connected;
+  statusEl.textContent = connected ? "Connecté" : "Non connecté";
+  statusEl.classList.toggle("ok", connected);
+  connectBtn.style.display = connected ? "none" : "block";
+  disconnectBtn.style.display = connected ? "block" : "none";
+}
+
+document.getElementById("btn-gh-connect").addEventListener("click", () => {
+  if (!currentUser) { toast("Connecte-toi d'abord à ton compte Splits."); return; }
+  window.location.href = buildGoogleHealthAuthUrl();
+});
+document.getElementById("btn-gh-disconnect").addEventListener("click", async () => {
+  await callGoogleHealth("disconnect");
+  toast("Fitbit déconnecté");
+  updateGoogleHealthStatus();
+});
+
+// Au chargement : si l'URL contient ?code=... (retour de Google), on échange
+// le code contre des tokens via l'Edge Function, puis on nettoie l'URL.
+async function handleGoogleHealthCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  if (!code) return;
+  window.history.replaceState({}, "", window.location.pathname);
+  const result = await callGoogleHealth("exchange", { code, redirect_uri: googleHealthRedirectUri() });
+  if (result.connected) {
+    toast("Fitbit connecté");
+  } else {
+    toast("Échec de la connexion Fitbit");
+  }
+  showScreen("screen-account");
+  updateAccountUI();
+  updateGoogleHealthStatus();
+}
+
+// Récupère la FC moyenne sur la fenêtre temporelle d'une course et l'affiche
+// dans le détail, si l'utilisateur est connecté et que des données existent.
+// Échoue silencieusement dans tous les autres cas (pas de compte connecté,
+// pas de données pour cette période, etc.) — la cellule reste simplement masquée.
+async function tryShowRunHeartRate(r) {
+  const cell = document.getElementById("detail-hr-cell");
+  cell.style.display = "none";
+  if (!currentUser) return;
+  const start = new Date(r.date);
+  const end = new Date(start.getTime() + r.durationSec * 1000);
+  const result = await callGoogleHealth("heart_rate", { start: start.toISOString(), end: end.toISOString() });
+  const points = result.dataPoints;
+  if (!Array.isArray(points) || points.length === 0) return;
+  const bpms = points
+    .map((p) => p?.heartRate?.bpm ?? p?.heartRate?.value ?? null)
+    .filter((v) => typeof v === "number" && v > 0);
+  if (bpms.length === 0) return;
+  const avgBpm = Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length);
+  document.getElementById("detail-hr").textContent = `${avgBpm} bpm`;
+  cell.style.display = "";
+}
+
+// ============================================================
 // RÉGLAGES — fréquence des alertes vocales, par type de bloc
 // ============================================================
 function bindSettingSlider(rangeId, valId, key) {
@@ -2255,4 +2365,5 @@ sb.auth.getSession().then(({ data }) => {
   currentUser = data.session ? data.session.user : null;
   updateAccountUI();
   if (currentUser) syncNow({ silent: true });
+  handleGoogleHealthCallback();
 });
