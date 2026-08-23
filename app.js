@@ -2363,6 +2363,121 @@ function fmtPctDiff(phoneM, fitbitM) {
   return Math.round(((fitbitM - phoneM) / phoneM) * 100);
 }
 
+// Formate l'heure civile ("YYYY-MM-DDTHH:mm:ss") renvoyée par l'API pour
+// affichage dans la liste de sélection manuelle — extraction texte simple,
+// sans passer par Date() pour ne jamais réinterpréter cette heure comme UTC.
+function fmtCivilTimeShort(civil) {
+  if (!civil) return "—";
+  const m = String(civil).match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return civil;
+  return `${m[3]}/${m[2]} ${m[4]}:${m[5]}`;
+}
+
+// Affiche le résultat d'un exercice (auto-détecté ou choisi manuellement)
+// dans le panneau — mêmes lignes, même bouton "Appliquer" pour le dénivelé.
+function renderFitbitResult(r, panel, result) {
+  if (result.error === "not_connected") {
+    panel.innerHTML = `<div class="fitbit-empty">Fitbit non connecté — va dans Compte pour te connecter.</div>`;
+    return;
+  }
+  if (!result.hasTrack) {
+    panel.innerHTML = `<div class="fitbit-empty">Exercice trouvé, mais sans tracé exploitable.</div>`;
+    return;
+  }
+
+  const rows = [];
+
+  if (result.distanceM) {
+    const pct = fmtPctDiff(r.distanceM, result.distanceM);
+    const warn = pct != null && Math.abs(pct) >= 3;
+    rows.push(`
+      <div class="fitbit-row">
+        <span class="fitbit-label">Distance téléphone / Fitbit</span>
+        <span class="fitbit-value${warn ? " warn" : ""}">${fmtKm(r.distanceM)} / ${fmtKm(result.distanceM)} km${pct != null ? ` (${pct > 0 ? "+" : ""}${pct}%)` : ""}</span>
+      </div>
+    `);
+  }
+
+  if (result.elevationGainM != null) {
+    const alreadyApplied = r.elevationGainM === result.elevationGainM;
+    rows.push(`
+      <div class="fitbit-row">
+        <span class="fitbit-label">Dénivelé (altimètre Fitbit)</span>
+        <span class="fitbit-value">+${result.elevationGainM} m</span>
+        <button class="fitbit-apply-btn" id="btn-apply-elev" ${alreadyApplied ? "disabled" : ""}>${alreadyApplied ? "Appliqué ✓" : "Appliquer"}</button>
+      </div>
+    `);
+  }
+
+  if (result.avgCadence != null) {
+    rows.push(`
+      <div class="fitbit-row">
+        <span class="fitbit-label">Cadence moyenne</span>
+        <span class="fitbit-value">${result.avgCadence} spm</span>
+      </div>
+    `);
+  }
+
+  panel.innerHTML = rows.length ? rows.join("") : `<div class="fitbit-empty">Pas de donnée exploitable pour cette course.</div>`;
+
+  const applyBtn = document.getElementById("btn-apply-elev");
+  if (applyBtn) {
+    applyBtn.onclick = async () => {
+      r.elevationGainM = result.elevationGainM;
+      r.updatedAt = new Date().toISOString();
+      saveRuns();
+      await pushRun(r);
+      refreshElevCell(r);
+      applyBtn.disabled = true;
+      applyBtn.textContent = "Appliqué ✓";
+      toast("Dénivelé Fitbit appliqué");
+    };
+  }
+}
+
+// Repli quand l'auto-détection ne trouve rien : liste tous les exercices
+// Fitbit de la journée (00:00–24:00 heure locale) pour choix manuel.
+async function showManualExercisePicker(r, panel) {
+  panel.innerHTML = `<div class="fitbit-empty">Recherche des exercices de la journée…</div>`;
+  const dayStart = new Date(r.date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const listResult = await callGoogleHealth("list_exercises", {
+    civilStart: toCivilString(dayStart),
+    civilEnd: toCivilString(dayEnd),
+  });
+
+  if (listResult.error === "not_connected") {
+    panel.innerHTML = `<div class="fitbit-empty">Fitbit non connecté — va dans Compte pour te connecter.</div>`;
+    return;
+  }
+  const exercises = listResult.exercises || [];
+  if (exercises.length === 0) {
+    panel.innerHTML = `<div class="fitbit-empty">Aucun exercice Fitbit trouvé pour cette journée — vérifie que la montre a bien synchronisé.</div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="fitbit-empty">Aucune correspondance automatique — choisis l'exercice sur la montre :</div>
+    <div class="fitbit-picker"></div>
+  `;
+  const pickerEl = panel.querySelector(".fitbit-picker");
+  exercises.forEach((ex) => {
+    const btn = document.createElement("button");
+    btn.className = "fitbit-pick-btn";
+    const distLabel = ex.distanceMeters ? ` · ${fmtKm(ex.distanceMeters)} km` : "";
+    btn.textContent = `${fmtCivilTimeShort(ex.civilStartTime)}${ex.activityType ? " · " + ex.activityType : ""}${distLabel}`;
+    btn.onclick = async () => {
+      panel.innerHTML = `<div class="fitbit-empty">Chargement du tracé…</div>`;
+      const result = await callGoogleHealth("exercise_track_by_name", { name: ex.name });
+      renderFitbitResult(r, panel, result);
+    };
+    pickerEl.appendChild(btn);
+  });
+}
+
 function setupFitbitCompare(r) {
   const btn = document.getElementById("btn-fitbit-compare");
   const panel = document.getElementById("fitbit-compare-panel");
@@ -2388,62 +2503,10 @@ function setupFitbitCompare(r) {
       return;
     }
     if (!result.found) {
-      panel.innerHTML = `<div class="fitbit-empty">Aucun exercice Fitbit trouvé sur ce créneau.</div>`;
+      await showManualExercisePicker(r, panel);
       return;
     }
-    if (!result.hasTrack) {
-      panel.innerHTML = `<div class="fitbit-empty">Exercice trouvé, mais sans tracé exploitable.</div>`;
-      return;
-    }
-
-    const rows = [];
-
-    if (result.distanceM) {
-      const pct = fmtPctDiff(r.distanceM, result.distanceM);
-      const warn = pct != null && Math.abs(pct) >= 3;
-      rows.push(`
-        <div class="fitbit-row">
-          <span class="fitbit-label">Distance téléphone / Fitbit</span>
-          <span class="fitbit-value${warn ? " warn" : ""}">${fmtKm(r.distanceM)} / ${fmtKm(result.distanceM)} km${pct != null ? ` (${pct > 0 ? "+" : ""}${pct}%)` : ""}</span>
-        </div>
-      `);
-    }
-
-    if (result.elevationGainM != null) {
-      const alreadyApplied = r.elevationGainM === result.elevationGainM;
-      rows.push(`
-        <div class="fitbit-row">
-          <span class="fitbit-label">Dénivelé (altimètre Fitbit)</span>
-          <span class="fitbit-value">+${result.elevationGainM} m</span>
-          <button class="fitbit-apply-btn" id="btn-apply-elev" ${alreadyApplied ? "disabled" : ""}>${alreadyApplied ? "Appliqué ✓" : "Appliquer"}</button>
-        </div>
-      `);
-    }
-
-    if (result.avgCadence != null) {
-      rows.push(`
-        <div class="fitbit-row">
-          <span class="fitbit-label">Cadence moyenne</span>
-          <span class="fitbit-value">${result.avgCadence} spm</span>
-        </div>
-      `);
-    }
-
-    panel.innerHTML = rows.length ? rows.join("") : `<div class="fitbit-empty">Pas de donnée exploitable pour cette course.</div>`;
-
-    const applyBtn = document.getElementById("btn-apply-elev");
-    if (applyBtn) {
-      applyBtn.onclick = async () => {
-        r.elevationGainM = result.elevationGainM;
-        r.updatedAt = new Date().toISOString();
-        saveRuns();
-        await pushRun(r);
-        refreshElevCell(r);
-        applyBtn.disabled = true;
-        applyBtn.textContent = "Appliqué ✓";
-        toast("Dénivelé Fitbit appliqué");
-      };
-    }
+    renderFitbitResult(r, panel, result);
   };
 }
 
