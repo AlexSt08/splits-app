@@ -271,6 +271,10 @@
         <div class="label">FC moyenne</div>
         <div class="value" id="detail-hr">—</div>
       </div>
+      <div class="cell" id="detail-elev-cell" style="display:none; grid-column: 1 / -1;">
+        <div class="label">Dénivelé (Fitbit)</div>
+        <div class="value" id="detail-elev">—</div>
+      </div>
     </div>
 
     <button class="map-trigger" id="btn-open-map">
@@ -290,6 +294,13 @@
         <div class="splits-table" id="detail-splits"></div>
       </div>
     </div>
+
+    <button class="map-trigger" id="btn-fitbit-compare" style="display:none;">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+      <span>Comparer avec la montre Fitbit</span>
+      <span class="map-trigger-arrow">→</span>
+    </button>
+    <div class="fitbit-compare-panel" id="fitbit-compare-panel" style="display:none;"></div>
 
     <button class="share-run" id="btn-share-run">Partager cette course</button>
     <div class="share-status" id="share-panel" style="display:none;">
