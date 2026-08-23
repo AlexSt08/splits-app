@@ -1469,6 +1469,8 @@ function openDetail(id) {
 
   renderRunPaceHistory(r);
   tryShowRunHeartRate(r);
+  refreshElevCell(r);
+  setupFitbitCompare(r);
 
   const splitsEl = document.getElementById("detail-splits");
   splitsEl.innerHTML = "";
@@ -2088,6 +2090,7 @@ function runToRemote(r) {
     pace_history: r.paceHistory || [],
     phase_log: r.phaseLog || [],
     has_repetitions: !!r.hasRepetitions,
+    elevation_gain_m: r.elevationGainM ?? null,
   };
 }
 function remoteToRun(row) {
@@ -2104,6 +2107,7 @@ function remoteToRun(row) {
     paceHistory: row.pace_history || [],
     phaseLog: row.phase_log || [],
     hasRepetitions: !!row.has_repetitions,
+    elevationGainM: row.elevation_gain_m != null ? Number(row.elevation_gain_m) : null,
   };
 }
 
@@ -2328,6 +2332,111 @@ async function tryShowRunHeartRate(r) {
   const avgBpm = Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length);
   document.getElementById("detail-hr").textContent = `${avgBpm} bpm`;
   cell.style.display = "";
+}
+
+// ============================================================
+// FITBIT — comparaison post-course (dénivelé, distance, cadence)
+// Recoupement manuel uniquement : rien n'est appliqué sans clic explicite
+// sur "Appliquer" (cf. préférence de l'utilisateur pour la correction
+// manuelle du tracé GPS, même principe ici pour le dénivelé).
+// ============================================================
+function refreshElevCell(r) {
+  const cell = document.getElementById("detail-elev-cell");
+  if (r.elevationGainM != null) {
+    document.getElementById("detail-elev").textContent = `+${Math.round(r.elevationGainM)} m`;
+    cell.style.display = "";
+  } else {
+    cell.style.display = "none";
+  }
+}
+
+function fmtPctDiff(phoneM, fitbitM) {
+  if (!phoneM || !fitbitM) return null;
+  return Math.round(((fitbitM - phoneM) / phoneM) * 100);
+}
+
+function setupFitbitCompare(r) {
+  const btn = document.getElementById("btn-fitbit-compare");
+  const panel = document.getElementById("fitbit-compare-panel");
+  panel.style.display = "none";
+  panel.innerHTML = "";
+
+  if (!currentUser) { btn.style.display = "none"; return; }
+  btn.style.display = "flex";
+
+  btn.onclick = async () => {
+    btn.querySelector("span").textContent = "Recherche en cours…";
+    btn.disabled = true;
+    const start = new Date(r.date);
+    const end = new Date(start.getTime() + r.durationSec * 1000);
+    const result = await callGoogleHealth("exercise_track", { start: start.toISOString(), end: end.toISOString() });
+    btn.disabled = false;
+    btn.querySelector("span").textContent = "Comparer avec la montre Fitbit";
+    btn.style.display = "none";
+    panel.style.display = "flex";
+
+    if (result.error === "not_connected") {
+      panel.innerHTML = `<div class="fitbit-empty">Fitbit non connecté — va dans Compte pour te connecter.</div>`;
+      return;
+    }
+    if (!result.found) {
+      panel.innerHTML = `<div class="fitbit-empty">Aucun exercice Fitbit trouvé sur ce créneau.</div>`;
+      return;
+    }
+    if (!result.hasTrack) {
+      panel.innerHTML = `<div class="fitbit-empty">Exercice trouvé, mais sans tracé exploitable.</div>`;
+      return;
+    }
+
+    const rows = [];
+
+    if (result.distanceM) {
+      const pct = fmtPctDiff(r.distanceM, result.distanceM);
+      const warn = pct != null && Math.abs(pct) >= 3;
+      rows.push(`
+        <div class="fitbit-row">
+          <span class="fitbit-label">Distance téléphone / Fitbit</span>
+          <span class="fitbit-value${warn ? " warn" : ""}">${fmtKm(r.distanceM)} / ${fmtKm(result.distanceM)} km${pct != null ? ` (${pct > 0 ? "+" : ""}${pct}%)` : ""}</span>
+        </div>
+      `);
+    }
+
+    if (result.elevationGainM != null) {
+      const alreadyApplied = r.elevationGainM === result.elevationGainM;
+      rows.push(`
+        <div class="fitbit-row">
+          <span class="fitbit-label">Dénivelé (altimètre Fitbit)</span>
+          <span class="fitbit-value">+${result.elevationGainM} m</span>
+          <button class="fitbit-apply-btn" id="btn-apply-elev" ${alreadyApplied ? "disabled" : ""}>${alreadyApplied ? "Appliqué ✓" : "Appliquer"}</button>
+        </div>
+      `);
+    }
+
+    if (result.avgCadence != null) {
+      rows.push(`
+        <div class="fitbit-row">
+          <span class="fitbit-label">Cadence moyenne</span>
+          <span class="fitbit-value">${result.avgCadence} spm</span>
+        </div>
+      `);
+    }
+
+    panel.innerHTML = rows.length ? rows.join("") : `<div class="fitbit-empty">Pas de donnée exploitable pour cette course.</div>`;
+
+    const applyBtn = document.getElementById("btn-apply-elev");
+    if (applyBtn) {
+      applyBtn.onclick = async () => {
+        r.elevationGainM = result.elevationGainM;
+        r.updatedAt = new Date().toISOString();
+        saveRuns();
+        await pushRun(r);
+        refreshElevCell(r);
+        applyBtn.disabled = true;
+        applyBtn.textContent = "Appliqué ✓";
+        toast("Dénivelé Fitbit appliqué");
+      };
+    }
+  };
 }
 
 // ============================================================
