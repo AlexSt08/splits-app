@@ -345,6 +345,14 @@ function fmtDateFull(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
+// Heure CIVILE locale (celle du téléphone, sans fuseau) au format
+// "YYYY-MM-DDTHH:mm:ss" — nécessaire pour le filtre civil_start_time de
+// Google Health, qui attend l'heure telle qu'affichée sur la montre, pas
+// l'heure UTC (toISOString() serait décalée de l'offset du fuseau local).
+function toCivilString(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 function toast(msg) {
   const el = document.getElementById("toast");
   el.textContent = msg;
@@ -2369,7 +2377,7 @@ function setupFitbitCompare(r) {
     btn.disabled = true;
     const start = new Date(r.date);
     const end = new Date(start.getTime() + r.durationSec * 1000);
-    const result = await callGoogleHealth("exercise_track", { start: start.toISOString(), end: end.toISOString() });
+    const result = await callGoogleHealth("exercise_track", { civilStart: toCivilString(start), civilEnd: toCivilString(end) });
     btn.disabled = false;
     btn.querySelector("span").textContent = "Comparer avec la montre Fitbit";
     btn.style.display = "none";
