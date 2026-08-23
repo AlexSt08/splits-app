@@ -1110,6 +1110,41 @@ button:focus-visible, a:focus-visible {
   text-align: center;
 }
 
+/* panneau "Comparer avec Fitbit" : recoupement post-course (dénivelé
+   baromètre, distance montre, cadence) — jamais de correction automatique,
+   uniquement une proposition avec bouton "Appliquer" explicite */
+.fitbit-compare-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  flex-shrink: 0;
+}
+.fitbit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.fitbit-row .fitbit-label { color: var(--ink-dim); }
+.fitbit-row .fitbit-value { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+.fitbit-row .fitbit-value.warn { color: var(--accent); }
+.fitbit-apply-btn {
+  background: var(--accent);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.fitbit-apply-btn:disabled { opacity: 0.5; }
+.fitbit-empty { font-size: 12px; color: var(--ink-dim); text-align: center; padding: 4px 0; }
+
 /* "Allure" (barres/courbe) : zone flexible prioritaire, défile en interne
    si une séance très chargée en répétitions dépasse l'espace disponible —
    jamais la page entière (cf. #screen-detail overflow-y:hidden) */
