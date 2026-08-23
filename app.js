@@ -50,12 +50,16 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ============================================================
-// GOOGLE HEALTH (Fitbit) — fréquence cardiaque
+// GOOGLE HEALTH (Fitbit) — fréquence cardiaque + activité/exercice
 // Le Client ID n'est PAS un secret (contrairement au Client Secret, qui
 // reste exclusivement dans l'Edge Function Supabase "google-health").
+// activity_and_fitness est nécessaire pour le dénivelé (baromètre), la
+// distance et le tracé d'exercice (export TCX), utilisés pour la
+// correction post-course. Un changement de scope invalide la connexion
+// existante — l'utilisateur doit se reconnecter une fois après ce déploiement.
 // ============================================================
 const GOOGLE_HEALTH_CLIENT_ID = "507298607006-icoje3e3fk4upb301sqmmj319mhkkbmj.apps.googleusercontent.com";
-const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
 // Valeur fixe et canonique, indépendante de l'URL exacte utilisée pour
 // accéder à la page (avec ou sans "index.html", avec ou sans slash final).
 // Google exige une correspondance EXACTE avec l'URI enregistrée dans Google
