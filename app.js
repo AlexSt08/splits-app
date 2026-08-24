@@ -1514,6 +1514,7 @@ function openDetail(id) {
   function openMapSheet() {
     document.getElementById("map-sheet-backdrop").classList.add("show");
     document.getElementById("map-sheet").classList.add("show");
+    const legendEl = document.getElementById("map-legend");
     setTimeout(() => {
       const mapEl = document.getElementById("detail-map");
       if (detailMap) { detailMap.remove(); detailMap = null; detailLine = null; }
@@ -1522,9 +1523,22 @@ function openDetail(id) {
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(detailMap);
         const latlngs = r.path.map((p) => [p.lat, p.lng]);
         detailLine = L.polyline(latlngs, { color: "#d6432e", weight: 4 }).addTo(detailMap);
-        detailMap.fitBounds(detailLine.getBounds(), { padding: [16, 16] });
+        let bounds = detailLine.getBounds();
+
+        // tracé Fitbit (montre) superposé, s'il a été récupéré via
+        // "Comparer avec la montre Fitbit" — couleur distincte + légende.
+        const hasFitbitTrack = r.fitbitTrackpoints && r.fitbitTrackpoints.length > 1;
+        if (hasFitbitTrack) {
+          const fitbitLatlngs = r.fitbitTrackpoints.map((p) => [p.lat, p.lng]);
+          const fitbitLine = L.polyline(fitbitLatlngs, { color: "#d9a73b", weight: 3, dashArray: "6,4" }).addTo(detailMap);
+          bounds = bounds.extend(fitbitLine.getBounds());
+        }
+        legendEl.style.display = hasFitbitTrack ? "flex" : "none";
+
+        detailMap.fitBounds(bounds, { padding: [16, 16] });
       } else {
         mapEl.innerHTML = `<div class="empty-state" style="border:none;">Pas de tracé GPS pour cette course.</div>`;
+        legendEl.style.display = "none";
       }
       if (detailMap) detailMap.invalidateSize();
     }, 260); // laisse l'animation du bottom sheet se terminer avant d'initialiser Leaflet
@@ -2403,6 +2417,15 @@ function renderFitbitResult(r, panel, result) {
   if (!result.hasTrack) {
     panel.innerHTML = `<div class="fitbit-empty">Exercice trouvé, mais sans tracé exploitable.</div>`;
     return;
+  }
+
+  // Stocké en mémoire (non persisté) sur l'objet course déjà référencé par
+  // openDetail/openMapSheet : si l'utilisateur ouvre ensuite le bottom sheet
+  // du tracé GPS, il verra le tracé Fitbit superposé. Nécessite le scope
+  // location (voir Edge Function) — absent si non reconnecté, auquel cas
+  // result.trackpoints est simplement vide et rien n'est superposé.
+  if (result.trackpoints && result.trackpoints.length > 1) {
+    r.fitbitTrackpoints = result.trackpoints.map((p) => ({ lat: p.lat, lng: p.lon }));
   }
 
   const rows = [];
