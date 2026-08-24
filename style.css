@@ -962,11 +962,13 @@ button:focus-visible, a:focus-visible {
 }
 .back-row button { font-family: var(--mono); font-size: 13px; color: var(--ink-dim); display:flex; align-items:center; gap:6px; }
 
-/* ---------- RUN DETAIL (tient sans scroll : la zone des splits est la seule flexible) ---------- */
+/* ---------- RUN DETAIL (défilement de page normal — les blocs Allure et
+   Splits gardent leur taille naturelle plutôt que de se disputer un espace
+   fixe ; seul le tracé GPS reste en bottom sheet à part) ---------- */
 #screen-detail {
-  padding: 0 20px 12px;
+  padding: 0 20px 20px;
   gap: 10px;
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 
 .detail-title {
@@ -1156,35 +1158,26 @@ button:focus-visible, a:focus-visible {
   font-size: 11.5px;
 }
 
-/* "Allure" (barres/courbe) : zone flexible prioritaire, défile en interne
-   si une séance très chargée en répétitions dépasse l'espace disponible —
-   jamais la page entière (cf. #screen-detail overflow-y:hidden) */
+/* "Allure" (barres/courbe) : hauteur naturelle — la page défile désormais
+   normalement (cf. #screen-detail overflow-y:auto), donc plus besoin de
+   comprimer ce bloc pour tout faire tenir sur un écran */
 .detail-analysis-block {
   display: flex;
   flex-direction: column;
-  flex: 1 1 140px;
-  min-height: 0;
+  flex-shrink: 0;
 }
 .detail-analysis-block .pace-history-stack {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
   margin-top: 2px;
   margin-bottom: 0;
 }
 
-/* "Splits par km" : bloc distinct, hauteur plafonnée avec son propre défilement
-   interne indépendant de celui d'"Allure" */
+/* "Splits par km" : hauteur naturelle également, plus de plafond forcé */
 .detail-splits-block {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  max-height: 30vh;
 }
 .splits-table-wrap {
-  flex: 1;
-  min-height: 50px;
-  overflow-y: auto;
   margin-top: 2px;
 }
 
