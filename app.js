@@ -1770,6 +1770,7 @@ function activateRun() {
   if (!tracking.active) return; // course arrêtée pendant le décompte
   tracking.prepping = false;
   tracking.startTime = Date.now();
+  tracking.runStartedAt = tracking.startTime; // fixe, jamais modifié par pause/reprise — sert de vrai "début" pour les requêtes Fitbit
   tracking.lastSplitTime = Date.now();
   document.getElementById("track-status").textContent = "EN COURSE";
 
@@ -2011,6 +2012,7 @@ function stopRun() {
   const run = {
     id: "r_" + Date.now(),
     date: new Date().toISOString(),
+    startedAt: tracking.runStartedAt ? new Date(tracking.runStartedAt).toISOString() : null,
     distanceM,
     durationSec,
     avgPaceSecPerKm,
@@ -2090,6 +2092,7 @@ function runToRemote(r) {
     id: r.id,
     user_id: currentUser ? currentUser.id : undefined,
     date: r.date,
+    started_at: r.startedAt || null,
     distance_m: r.distanceM,
     duration_sec: r.durationSec,
     avg_pace_sec_per_km: r.avgPaceSecPerKm,
@@ -2107,6 +2110,7 @@ function remoteToRun(row) {
   return {
     id: row.id,
     date: row.date,
+    startedAt: row.started_at || null,
     distanceM: Number(row.distance_m),
     durationSec: Number(row.duration_sec),
     avgPaceSecPerKm: Number(row.avg_pace_sec_per_km),
@@ -2322,6 +2326,17 @@ async function handleGoogleHealthCallback() {
   updateGoogleHealthStatus();
 }
 
+// Instant de départ RÉEL d'une course, pour les requêtes Fitbit (FC, exercice).
+// r.date est l'heure d'ENREGISTREMENT (fin de course), pas le départ — un
+// bug historique confondait les deux, pointant les requêtes Fitbit vers une
+// fenêtre entièrement APRÈS la course. r.startedAt (ajouté depuis) porte le
+// vrai départ ; à défaut (courses enregistrées avant ce correctif), on
+// retranche la durée à r.date en repli (suppose l'absence de pause).
+function runRealStart(r) {
+  if (r.startedAt) return new Date(r.startedAt);
+  return new Date(new Date(r.date).getTime() - r.durationSec * 1000);
+}
+
 // Récupère la FC moyenne sur la fenêtre temporelle d'une course et l'affiche
 // dans le détail, si l'utilisateur est connecté et que des données existent.
 // Échoue silencieusement dans tous les autres cas (pas de compte connecté,
@@ -2330,7 +2345,7 @@ async function tryShowRunHeartRate(r) {
   const cell = document.getElementById("detail-hr-cell");
   cell.style.display = "none";
   if (!currentUser) return;
-  const start = new Date(r.date);
+  const start = runRealStart(r);
   const end = new Date(start.getTime() + r.durationSec * 1000);
   const result = await callGoogleHealth("heart_rate", { start: start.toISOString(), end: end.toISOString() });
   const points = result.dataPoints;
@@ -2395,10 +2410,12 @@ function renderFitbitResult(r, panel, result) {
   if (result.distanceM) {
     const pct = fmtPctDiff(r.distanceM, result.distanceM);
     const warn = pct != null && Math.abs(pct) >= 3;
+    const distAlreadyApplied = Math.round(r.distanceM) === Math.round(result.distanceM);
     rows.push(`
       <div class="fitbit-row">
         <span class="fitbit-label">Distance téléphone / Fitbit</span>
         <span class="fitbit-value${warn ? " warn" : ""}">${fmtKm(r.distanceM)} / ${fmtKm(result.distanceM)} km${pct != null ? ` (${pct > 0 ? "+" : ""}${pct}%)` : ""}</span>
+        <button class="fitbit-apply-btn" id="btn-apply-dist" ${distAlreadyApplied ? "disabled" : ""}>${distAlreadyApplied ? "Appliqué ✓" : "Appliquer"}</button>
       </div>
     `);
   }
@@ -2432,7 +2449,31 @@ function renderFitbitResult(r, panel, result) {
     `);
   }
 
+  if (result.fitbitSplits && result.fitbitSplits.length) {
+    rows.push(`
+      <div class="fitbit-row">
+        <span class="fitbit-label">Splits par km (Fitbit, ${result.fitbitSplits.length} km)</span>
+        <button class="fitbit-apply-btn" id="btn-apply-splits">Appliquer</button>
+      </div>
+    `);
+  }
+
   panel.innerHTML = rows.length ? rows.join("") : `<div class="fitbit-empty">Pas de donnée exploitable pour cette course.</div>`;
+
+  const applyDistBtn = document.getElementById("btn-apply-dist");
+  if (applyDistBtn) {
+    applyDistBtn.onclick = async () => {
+      r.distanceM = result.distanceM;
+      r.avgPaceSecPerKm = r.distanceM > 0 ? r.durationSec / (r.distanceM / 1000) : 0;
+      r.splits = recomputeUniformSplits(r.distanceM, r.avgPaceSecPerKm);
+      r.updatedAt = new Date().toISOString();
+      saveRuns();
+      markPRs();
+      await pushRun(r);
+      toast("Distance Fitbit appliquée — allure et splits recalculés");
+      openDetail(r.id);
+    };
+  }
 
   const applyBtn = document.getElementById("btn-apply-elev");
   if (applyBtn) {
@@ -2447,13 +2488,26 @@ function renderFitbitResult(r, panel, result) {
       toast("Dénivelé Fitbit appliqué");
     };
   }
+
+  const applySplitsBtn = document.getElementById("btn-apply-splits");
+  if (applySplitsBtn) {
+    applySplitsBtn.onclick = async () => {
+      r.splits = result.fitbitSplits.map((s) => ({ km: s.km, seconds: s.seconds }));
+      r.updatedAt = new Date().toISOString();
+      saveRuns();
+      markPRs();
+      await pushRun(r);
+      toast("Splits Fitbit appliqués");
+      openDetail(r.id);
+    };
+  }
 }
 
 // Repli quand l'auto-détection ne trouve rien : liste tous les exercices
 // Fitbit de la journée (00:00–24:00 heure locale) pour choix manuel.
 async function showManualExercisePicker(r, panel) {
   panel.innerHTML = `<div class="fitbit-empty">Recherche des exercices de la journée…</div>`;
-  const dayStart = new Date(r.date);
+  const dayStart = runRealStart(r);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
@@ -2504,7 +2558,7 @@ function setupFitbitCompare(r) {
   btn.onclick = async () => {
     btn.querySelector("span").textContent = "Recherche en cours…";
     btn.disabled = true;
-    const start = new Date(r.date);
+    const start = runRealStart(r);
     const end = new Date(start.getTime() + r.durationSec * 1000);
     const result = await callGoogleHealth("exercise_track", { civilStart: toCivilString(start), civilEnd: toCivilString(end) });
     btn.disabled = false;
