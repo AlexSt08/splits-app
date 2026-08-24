@@ -53,13 +53,15 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // GOOGLE HEALTH (Fitbit) — fréquence cardiaque + activité/exercice
 // Le Client ID n'est PAS un secret (contrairement au Client Secret, qui
 // reste exclusivement dans l'Edge Function Supabase "google-health").
-// activity_and_fitness est nécessaire pour le dénivelé (baromètre), la
-// distance et le tracé d'exercice (export TCX), utilisés pour la
-// correction post-course. Un changement de scope invalide la connexion
-// existante — l'utilisateur doit se reconnecter une fois après ce déploiement.
+// activity_and_fitness donne accès à metricsSummary (distance, cadence
+// estimée, FC moyenne d'un exercice) — suffisant pour l'essentiel de la
+// correction post-course. location.readonly est en plus pour le dénivelé
+// et le tracé GPS (export TCX) — bonus, jamais bloquant si absent/refusé.
+// Un changement de scope invalide la connexion existante — l'utilisateur
+// doit se reconnecter une fois après ce déploiement.
 // ============================================================
 const GOOGLE_HEALTH_CLIENT_ID = "507298607006-icoje3e3fk4upb301sqmmj319mhkkbmj.apps.googleusercontent.com";
-const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
+const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly https://www.googleapis.com/auth/googlehealth.location.readonly";
 // Valeur fixe et canonique, indépendante de l'URL exacte utilisée pour
 // accéder à la page (avec ou sans "index.html", avec ou sans slash final).
 // Google exige une correspondance EXACTE avec l'URI enregistrée dans Google
@@ -2334,7 +2336,10 @@ async function tryShowRunHeartRate(r) {
   const points = result.dataPoints;
   if (!Array.isArray(points) || points.length === 0) return;
   const bpms = points
-    .map((p) => p?.heartRate?.bpm ?? p?.heartRate?.value ?? null)
+    .map((p) => {
+      const v = p?.heartRate?.beatsPerMinute;
+      return v != null ? Number(v) : null;
+    })
     .filter((v) => typeof v === "number" && v > 0);
   if (bpms.length === 0) return;
   const avgBpm = Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length);
@@ -2414,6 +2419,15 @@ function renderFitbitResult(r, panel, result) {
       <div class="fitbit-row">
         <span class="fitbit-label">Cadence moyenne</span>
         <span class="fitbit-value">${result.avgCadence} spm</span>
+      </div>
+    `);
+  }
+
+  if (result.avgHeartRateBpm != null) {
+    rows.push(`
+      <div class="fitbit-row">
+        <span class="fitbit-label">FC moyenne (Fitbit)</span>
+        <span class="fitbit-value">${result.avgHeartRateBpm} bpm</span>
       </div>
     `);
   }
