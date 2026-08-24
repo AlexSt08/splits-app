@@ -1071,6 +1071,29 @@ button:focus-visible, a:focus-visible {
   flex-shrink: 0;
 }
 
+/* légende téléphone/Fitbit du tracé GPS — affichée uniquement quand un
+   tracé Fitbit a été récupéré (via "Comparer avec la montre Fitbit") et
+   superposé au tracé téléphone sur la carte */
+.map-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+}
+.legend-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.legend-dot-phone { background: var(--accent); }
+.legend-dot-fitbit { background: var(--gold); }
+
 /* barre affichée pendant l'édition du tracé (mode correction) */
 .track-edit-bar {
   display: flex;
