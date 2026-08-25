@@ -1349,6 +1349,7 @@ button:focus-visible, a:focus-visible {
 /* section réglages des alertes vocales : curseurs par type de bloc */
 .settings-section { display: flex; flex-direction: column; gap: 20px; margin-top: 6px; }
 .settings-group { display: flex; flex-direction: column; gap: 12px; }
+.pace-dependent-row.disabled { opacity: 0.4; pointer-events: none; }
 .settings-group-title {
   font-family: var(--mono);
   font-size: 10.5px;
@@ -1357,6 +1358,12 @@ button:focus-visible, a:focus-visible {
   color: var(--gold);
 }
 .settings-row { display: flex; flex-direction: column; gap: 6px; }
+.settings-row-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.settings-row-toggle > span:first-child { font-size: 13.5px; color: var(--ink); }
 .settings-row > span:first-child { font-size: 13.5px; color: var(--ink); }
 .settings-row-controls { display: flex; align-items: center; gap: 12px; }
 .settings-row-controls input[type="range"] {
@@ -1372,6 +1379,48 @@ button:focus-visible, a:focus-visible {
   width: 40px;
   text-align: right;
   flex-shrink: 0;
+}
+
+/* interrupteur ON/OFF (ex. désactiver les alertes de vitesse) */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: var(--ink-dim);
+  border-radius: 50%;
+  transition: transform .15s ease, background .15s ease;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background: var(--accent);
 }
 
 /* connexion Google Health (Fitbit) */
