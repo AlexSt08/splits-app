@@ -2496,6 +2496,14 @@ function renderFitbitResult(r, panel, result) {
         <span class="fitbit-value" style="font-weight:400;">${diag}</span>
       </div>
     `);
+    if (d.rawSnippet) {
+      rows.push(`
+        <div class="fitbit-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+          <span class="fitbit-label" style="font-size:10.5px;opacity:.7;">Extrait XML brut</span>
+          <textarea readonly style="width:100%;height:120px;font-family:var(--mono);font-size:9px;background:var(--surface-raised);color:var(--ink-dim);border:1px solid var(--line);border-radius:6px;padding:6px;resize:vertical;">${d.rawSnippet.replace(/</g, "&lt;")}</textarea>
+        </div>
+      `);
+    }
   }
 
   panel.innerHTML = rows.length ? rows.join("") : `<div class="fitbit-empty">Pas de donnée exploitable pour cette course.</div>`;
