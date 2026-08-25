@@ -380,16 +380,24 @@
     <div class="settings-section">
       <div class="section-head"><h2>Alertes vocales</h2></div>
 
-      <div class="settings-group">
+      <div class="settings-row settings-row-toggle">
+        <span>Alertes de vitesse</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="set-pace-alerts-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-group" id="settings-group-continu">
         <div class="settings-group-title">Bloc continu</div>
-        <div class="settings-row">
+        <div class="settings-row pace-dependent-row">
           <span>Contrôle d'allure</span>
           <div class="settings-row-controls">
             <input type="range" id="set-pace-continu" min="2" max="15" step="1" />
             <span class="settings-val" id="set-pace-continu-val">5s</span>
           </div>
         </div>
-        <div class="settings-row">
+        <div class="settings-row pace-dependent-row">
           <span>Fenêtre de lissage (direct)</span>
           <div class="settings-row-controls">
             <input type="range" id="set-window-continu" min="3" max="20" step="1" />
@@ -405,16 +413,16 @@
         </div>
       </div>
 
-      <div class="settings-group">
+      <div class="settings-group" id="settings-group-work">
         <div class="settings-group-title">Bloc répétitions</div>
-        <div class="settings-row">
+        <div class="settings-row pace-dependent-row">
           <span>Contrôle d'allure</span>
           <div class="settings-row-controls">
             <input type="range" id="set-pace-work" min="2" max="15" step="1" />
             <span class="settings-val" id="set-pace-work-val">5s</span>
           </div>
         </div>
-        <div class="settings-row">
+        <div class="settings-row pace-dependent-row">
           <span>Fenêtre de lissage (direct)</span>
           <div class="settings-row-controls">
             <input type="range" id="set-window-work" min="3" max="20" step="1" />
