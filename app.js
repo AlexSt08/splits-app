@@ -201,6 +201,7 @@ let editingSteps = null;     // copie de travail des étapes pendant l'édition
 let collapsedWeeks = null;   // Set d'index de semaines repliées (null = pas encore initialisé)
 const SETTINGS_KEY = "splits.settings.v1";
 const DEFAULT_SETTINGS = {
+  paceAlertsEnabled: true,    // interrupteur global : alertes vocales "Accélère"/"Ralentis" (n'affecte pas les alertes de temps)
   paceCheckContinuSec: 5,     // fréquence du contrôle d'allure vocal, bloc continu
   paceCheckWorkSec: 5,        // fréquence du contrôle d'allure vocal, bloc répétitions
   paceWindowContinuSec: 10,   // fenêtre de lissage du contrôle d'allure EN DIRECT, bloc continu
@@ -1017,8 +1018,11 @@ function getRecentSamplesRetentionMs() {
 }
 
 // Répète l'alerte tant que l'allure lissée reste hors de la fourchette
-// cible ; silencieux dès le retour dans la zone.
+// cible ; silencieux dès le retour dans la zone. Ne fait rien si l'utilisateur
+// a désactivé les alertes de vitesse dans Compte & réglages — n'affecte pas
+// les alertes de temps (announcePhaseCountdown), qui restent indépendantes.
 function checkPaceAlert(currentPaceSecPerKm) {
+  if (!settings.paceAlertsEnabled) return;
   const zone = getCurrentTargetZone();
   if (!zone || !isFinite(currentPaceSecPerKm) || currentPaceSecPerKm <= 0) return;
   const inZone = currentPaceSecPerKm >= zone.min && currentPaceSecPerKm <= zone.max;
@@ -2621,6 +2625,25 @@ bindSettingSlider("set-window-continu", "set-window-continu-val", "paceWindowCon
 bindSettingSlider("set-window-work", "set-window-work-val", "paceWindowWorkSec");
 bindSettingSlider("set-time-continu", "set-time-continu-val", "timeAlertContinuSec");
 bindSettingSlider("set-time-work", "set-time-work-val", "timeAlertWorkSec");
+
+// Interrupteur global : coupe les annonces vocales "Accélère"/"Ralentis"
+// (checkPaceAlert) sans toucher aux alertes de temps, qui restent
+// indépendantes. Grise les réglages de vitesse (contrôle d'allure + fenêtre
+// de lissage) pour signaler visuellement qu'ils sont sans effet tant que
+// l'interrupteur est éteint.
+function updatePaceDependentRowsUI() {
+  document.querySelectorAll(".pace-dependent-row").forEach((row) => {
+    row.classList.toggle("disabled", !settings.paceAlertsEnabled);
+  });
+}
+const paceAlertsToggle = document.getElementById("set-pace-alerts-enabled");
+paceAlertsToggle.checked = settings.paceAlertsEnabled;
+updatePaceDependentRowsUI();
+paceAlertsToggle.addEventListener("change", () => {
+  settings.paceAlertsEnabled = paceAlertsToggle.checked;
+  saveSettings();
+  updatePaceDependentRowsUI();
+});
 
 // ============================================================
 // init
