@@ -2122,6 +2122,7 @@ function runToRemote(r) {
     phase_log: r.phaseLog || [],
     has_repetitions: !!r.hasRepetitions,
     elevation_gain_m: r.elevationGainM ?? null,
+    fitbit_source_name: r.fitbitSourceName || null,
   };
 }
 function remoteToRun(row) {
@@ -2140,6 +2141,7 @@ function remoteToRun(row) {
     phaseLog: row.phase_log || [],
     hasRepetitions: !!row.has_repetitions,
     elevationGainM: row.elevation_gain_m != null ? Number(row.elevation_gain_m) : null,
+    fitbitSourceName: row.fitbit_source_name || null,
   };
 }
 
@@ -2604,6 +2606,144 @@ function setupFitbitCompare(r) {
     renderFitbitResult(r, panel, result);
   };
 }
+
+// ============================================================
+// FITBIT — import d'une course entière depuis une date choisie
+// (distinct de setupFitbitCompare/showManualExercisePicker ci-dessus, qui
+// complètent une course DÉJÀ enregistrée par le téléphone). Ici, aucune
+// course Splits n'existe encore : on en crée une nouvelle à partir des
+// données Fitbit — utile pour les sorties courues montre seule, sans lancer
+// l'app. Déduplication via fitbitSourceName (le "name" unique de l'exercice
+// Fitbit) : une même sortie ne peut pas être importée deux fois.
+// ============================================================
+
+// Construit un objet course Splits complet à partir du résultat Fitbit —
+// mêmes champs qu'une course trackée en direct (stopRun), pour que le reste
+// de l'app (détail, partage, tendances, PR) la traite de façon identique.
+// paceHistory/phaseLog restent vides : Fitbit ne fournit pas de courbe
+// d'allure seconde par seconde, seulement des agrégats et des splits.
+function buildRunFromFitbitExercise(result, sourceName) {
+  const distanceM = result.distanceM || 0;
+  const durationSec = result.durationSec || 0;
+  const avgPaceSecPerKm = distanceM > 0 && durationSec > 0 ? durationSec / (distanceM / 1000) : 0;
+  const path = (result.trackpoints || []).map((p) => ({ lat: p.lat, lng: p.lon }));
+  const splits = result.fitbitSplits && result.fitbitSplits.length
+    ? result.fitbitSplits.map((s) => ({ km: s.km, seconds: s.seconds }))
+    : recomputeUniformSplits(distanceM, avgPaceSecPerKm);
+  const endIso = result.endTime ? new Date(result.endTime).toISOString() : new Date().toISOString();
+  const startIso = result.startTime ? new Date(result.startTime).toISOString() : null;
+
+  return {
+    id: "r_" + Date.now(),
+    date: endIso,
+    startedAt: startIso,
+    distanceM,
+    durationSec,
+    avgPaceSecPerKm,
+    path,
+    splits,
+    updatedAt: new Date().toISOString(),
+    shareToken: null,
+    paceHistory: [],
+    phaseLog: [],
+    hasRepetitions: false,
+    elevationGainM: result.elevationGainM ?? null,
+    fitbitSourceName: sourceName,
+  };
+}
+
+function closeFitbitImportSheet() {
+  document.getElementById("fitbit-import-sheet-backdrop").classList.remove("show");
+  document.getElementById("fitbit-import-sheet").classList.remove("show");
+}
+
+// Liste les exercices Fitbit de la date choisie (journée civile complète,
+// 00:00–24:00 heure locale) et affiche un bouton de sélection par exercice —
+// même gabarit visuel que showManualExercisePicker.
+async function searchFitbitImportsForDate(dateStr) {
+  const resultsEl = document.getElementById("fitbit-import-results");
+  resultsEl.innerHTML = `<div class="fitbit-empty">Recherche des exercices de la journée…</div>`;
+
+  const dayStart = new Date(dateStr + "T00:00:00");
+  const dayEnd = new Date(dateStr + "T00:00:00");
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const listResult = await callGoogleHealth("list_exercises", {
+    civilStart: toCivilString(dayStart),
+    civilEnd: toCivilString(dayEnd),
+  });
+
+  if (listResult.error === "not_connected") {
+    resultsEl.innerHTML = `<div class="fitbit-empty">Fitbit non connecté — va dans Compte pour te connecter.</div>`;
+    return;
+  }
+  const exercises = listResult.exercises || [];
+  if (exercises.length === 0) {
+    resultsEl.innerHTML = `<div class="fitbit-empty">Aucun exercice Fitbit trouvé pour cette date.</div>`;
+    return;
+  }
+
+  resultsEl.innerHTML = `<div class="fitbit-picker"></div>`;
+  const pickerEl = resultsEl.querySelector(".fitbit-picker");
+  exercises.forEach((ex) => {
+    const alreadyImported = runs.some((r) => r.fitbitSourceName === ex.name);
+    const btn = document.createElement("button");
+    btn.className = "fitbit-pick-btn";
+    btn.disabled = alreadyImported;
+    if (alreadyImported) btn.style.opacity = "0.45";
+    const distLabel = ex.distanceMeters ? ` · ${fmtKm(ex.distanceMeters)} km` : "";
+    btn.textContent = `${fmtCivilTimeShort(ex.civilStartTime)}${ex.activityType ? " · " + ex.activityType : ""}${distLabel}${alreadyImported ? " · déjà importée" : ""}`;
+    btn.onclick = async () => {
+      if (alreadyImported) return;
+      btn.disabled = true;
+      btn.textContent = "Import en cours…";
+      const result = await callGoogleHealth("exercise_track_by_name", { name: ex.name });
+      if (result.error === "not_connected") {
+        toast("Fitbit non connecté");
+        return;
+      }
+      if (!result.hasTrack) {
+        toast("Pas de donnée exploitable pour cet exercice.");
+        btn.disabled = false;
+        btn.textContent = "Réessayer";
+        return;
+      }
+      const run = buildRunFromFitbitExercise(result, ex.name);
+      runs.unshift(run);
+      saveRuns();
+      markPRs();
+      pushRun(run);
+      closeFitbitImportSheet();
+      renderHistory();
+      toast(`Course importée — ${fmtKm(run.distanceM)} km`);
+      openDetail(run.id);
+      showScreen("screen-detail");
+    };
+    pickerEl.appendChild(btn);
+  });
+}
+
+function setupFitbitImport() {
+  const btn = document.getElementById("btn-import-fitbit");
+  const dateInput = document.getElementById("fitbit-import-date");
+
+  btn.addEventListener("click", () => {
+    if (!currentUser) { toast("Connecte-toi d'abord à ton compte Splits."); return; }
+    if (!dateInput.value) {
+      const today = new Date();
+      dateInput.value = toCivilString(today).slice(0, 10);
+    }
+    document.getElementById("fitbit-import-sheet-backdrop").classList.add("show");
+    document.getElementById("fitbit-import-sheet").classList.add("show");
+    searchFitbitImportsForDate(dateInput.value);
+  });
+  dateInput.addEventListener("change", () => {
+    if (dateInput.value) searchFitbitImportsForDate(dateInput.value);
+  });
+  document.getElementById("btn-close-fitbit-import").onclick = closeFitbitImportSheet;
+  document.getElementById("fitbit-import-sheet-backdrop").onclick = closeFitbitImportSheet;
+}
+setupFitbitImport();
 
 // ============================================================
 // RÉGLAGES — fréquence des alertes vocales, par type de bloc
