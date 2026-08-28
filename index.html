@@ -184,6 +184,11 @@
       <button class="see-all" id="btn-open-trends">Voir →</button>
     </div>
 
+    <button class="trends-link" id="btn-import-fitbit">
+      <span class="trends-link-label">Importer une course Fitbit</span>
+      <span class="trends-link-arrow">+</span>
+    </button>
+
     <div class="recent-list-block">
       <div class="section-head"><h2>Toutes les courses</h2></div>
       <div class="run-list-wrap" id="history-run-list-wrap">
@@ -191,6 +196,18 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ IMPORT FITBIT (bottom sheet) ============ -->
+  <div id="fitbit-import-sheet-backdrop" class="bottom-sheet-backdrop"></div>
+  <div id="fitbit-import-sheet" class="bottom-sheet">
+    <div class="bottom-sheet-handle"></div>
+    <div class="bottom-sheet-header">
+      <span>Importer une course Fitbit</span>
+      <button id="btn-close-fitbit-import" class="bottom-sheet-close" aria-label="Fermer">✕</button>
+    </div>
+    <input type="date" id="fitbit-import-date" class="account-input" />
+    <div id="fitbit-import-results" class="fitbit-compare-panel"></div>
+  </div>
 
   <!-- ============ PROGRAM ============ -->
   <section id="screen-program" class="screen">
